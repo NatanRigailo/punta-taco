@@ -26,7 +26,7 @@ test("extrai parâmetro nomeado", () => {
 
 test("não casa profundidade diferente", () => {
   // Sem isso "/rapidos" casaria "/rapidos/trail" e a lista apareceria no lugar
-  // do drill.
+  // do cenário.
   assert.equal(matchPattern("/rapidos", "/rapidos/trail"), null);
   assert.equal(matchPattern("/rapidos/:id", "/rapidos"), null);
 });

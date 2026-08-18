@@ -23,7 +23,7 @@ export function mountSetup(root) {
         class: "lead",
         text:
           "Sem calibração toda métrica é chute, então este passo é obrigatório antes do primeiro "
-          + "drill. Feito uma vez, fica salvo por pedaleira.",
+          + "cenário. Feito uma vez, fica salvo por pedaleira.",
       }),
     ]),
   );

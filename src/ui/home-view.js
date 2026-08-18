@@ -99,7 +99,7 @@ export function mountHome(root) {
   root.append(hero, grid);
 
   // A pedaleira uncalibrated is the one thing that blocks every category, so it
-  // gets said here rather than being discovered inside a drill.
+  // gets said here rather than being discovered inside a scenario.
   if (!reading.ready) {
     root.append(
       el("p", { class: "callout" }, [

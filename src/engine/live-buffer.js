@@ -11,7 +11,7 @@
  * would need the next sample, and the whole point of this buffer is not to wait.
  * At a 20ms grid against a device reporting every ~19ms the difference is below
  * one step, and it is the raw signal — showing it smoothed would lie about the
- * chatter the drills exist to expose.
+ * chatter the scenarios exist to expose.
  */
 
 import { STEP_MS } from "./resample.js";
