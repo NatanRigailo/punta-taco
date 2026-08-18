@@ -1,0 +1,54 @@
+name: Supply chain
+
+# Guards the dependency policy documented in CLAUDE.md. The point is that the
+# policy fails loudly when violated, instead of eroding one convenient package
+# at a time.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Ceiling for the whole installed tree. Raising this is a deliberate decision,
+  # never a side effect of adding a package.
+  MAX_PACKAGES: 12
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Nenhuma dependencia de runtime
+        run: |
+          count=$(node -e 'const p=require("./package.json");process.stdout.write(String(Object.keys(p.dependencies||{}).length))')
+          if [ "$count" != "0" ]; then
+            echo "::error::package.json declara $count dependencia(s) de runtime."
+            echo "O site nao pode depender de nada em runtime — nada de npm chega ao browser."
+            exit 1
+          fi
+          echo "ok: zero dependencias de runtime"
+
+      - name: Instalar sem executar scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Tamanho da arvore instalada
+        run: |
+          total=$(npm ls --all --parseable 2>/dev/null | tail -n +2 | wc -l)
+          echo "pacotes instalados: $total (teto: $MAX_PACKAGES)"
+          npm ls --all 2>/dev/null || true
+          if [ "$total" -gt "$MAX_PACKAGES" ]; then
+            echo "::error::arvore cresceu para $total pacotes, acima do teto de $MAX_PACKAGES."
+            echo "Revise o que entrou antes de subir o teto."
+            exit 1
+          fi
+
+      - name: Vulnerabilidades conhecidas
+        run: npm audit --audit-level=moderate

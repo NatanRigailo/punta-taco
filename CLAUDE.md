@@ -18,7 +18,7 @@ sobreposto, e métricas que apontam onde a aplicação foi grosseira. Escopo com
 **Competências demonstradas:**
 - Processamento de sinal em tempo real (amostragem de passo fixo, filtragem, derivadas)
 - Integração com hardware via web APIs (Gamepad API, futuramente WebHID)
-- CI/CD e publicação automatizada em GitHub Pages
+- CI que cobra política de dependências e verificação de tipos
 - Engenharia de sustentação: dependência zero em runtime, sem build step
 
 ---
@@ -29,7 +29,7 @@ sobreposto, e métricas que apontam onde a aplicação foi grosseira. Escopo com
 - **Render:** Canvas 2D, sem framework
 - **Input:** Gamepad API
 - **Persistência:** IndexedDB (local); Supabase a partir do M2, só para ranking
-- **Hospedagem:** GitHub Pages, domínio `puntataco.natan.tec.br`
+- **Hospedagem:** nenhuma por enquanto — fase local (`npm run serve`). Pages volta quando fizer sentido
 
 **Não há build step.** Os arquivos do repo são o site. TypeScript é verificador, nunca etapa de
 deploy — se o toolchain quebrar, o site continua no ar. Não introduza bundler, framework ou
@@ -46,7 +46,7 @@ dependência de runtime sem discutir antes: isso é decisão de arquitetura, nã
 | Piso de hardware | monitor 60Hz, pedaleira de entrada | prefere-se assumir o pior a excluir quem tem 60Hz |
 | Jerk RMS | número relativo ao próprio histórico | resolução baixa impede comparação absoluta entre hardwares |
 | Backend | nenhum até o M2 | M1 inteiro é local; ranking é a única peça que exige servidor |
-| Repo | público | requisito do Pages no plano free |
+| Repo | público | portfólio; hospedagem grátis continua disponível quando voltar |
 
 ---
 
@@ -119,7 +119,36 @@ Merge de PR, push direto na `main`, deletar branch remota sem confirmação, mex
 O `../CLAUDE.md` assume aplicação containerizada com pipeline lint → SAST → build → scan →
 release → GHCR → deploy. Aqui não há imagem, servidor nem runtime próprio, então **Docker,
 GHCR, Trivy, healthz e reverse proxy não se aplicam**. O que permanece do padrão: CI no GitHub
-Actions, Dependabot, badges no README, roadmap versionado, budget zero, conventional commits.
+Actions, Dependabot, roadmap versionado, budget zero, conventional commits.
+
+## Política de dependências
+
+A preocupação aqui não é toolchain apodrecendo — é cadeia de suprimentos. `event-stream`,
+`colors.js` e `node-ipc` foram todos pacote pequeno, mantenedor único, e um dia o pacote virou
+outra coisa. As regras abaixo são cobradas pelo workflow `.github/workflows/supply-chain.yml`,
+para não erodirem um pacote conveniente por vez.
+
+| Regra | Como é garantida |
+|---|---|
+| **Zero dependências de runtime**, sempre | CI falha se `dependencies` do `package.json` não estiver vazio |
+| Nada de npm chega ao browser | não há bundler; o site importa apenas arquivos deste repo |
+| Árvore instalada abaixo de 12 pacotes | CI conta `npm ls --all` e falha acima do teto |
+| Install scripts nunca executam | `ignore-scripts=true` no `.npmrc` + `--ignore-scripts` no CI |
+| Lockfile versionado | `package-lock.json` no repo, instalação reprodutível |
+| Vulnerabilidade conhecida barra o merge | `npm audit --audit-level=moderate` no CI |
+
+**Estado hoje:** uma devDependency, `typescript`, com **zero dependências transitivas**,
+publicada pela Microsoft e usada só como verificador no CI.
+
+**Ao considerar um pacote novo**, a pergunta não é "resolve meu problema" — é: quem publica,
+quantas transitivas traz, e escrever à mão custaria quanto? Para quase tudo que este projeto
+precisa (Savitzky-Golay, RMS, regressão linear) a resposta é algumas dezenas de linhas, e código
+próprio que você entende vale mais que dependência que você não lê.
+
+**Subir o teto de pacotes é decisão consciente**, discutida antes — nunca efeito colateral de
+`npm install`.
+
+---
 
 ## Referências
 
