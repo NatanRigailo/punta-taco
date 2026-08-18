@@ -46,8 +46,10 @@
 
 <section>
   <h2 style="margin-top:0">Teste 1 — taxa efetiva <span class="hint">10s</span></h2>
-  <p class="hint">Pressione e solte o pedal continuamente durante o teste, em movimento suave e contínuo.
-     Compara amostras novas de verdade contra frequência de polling — responde se a leitura está presa ao refresh do monitor.</p>
+  <p class="hint">Pressione e solte o pedal <em>sem parar</em> durante os 10s, em movimento amplo e contínuo —
+     pausa ou movimento lento demais falseia a medida. Separa duas coisas: com que frequência o dispositivo
+     <em>reporta</em> (timestamp) e com que frequência o <em>valor muda</em>. A primeira é a taxa real; a segunda
+     é limitada pela resolução.</p>
   <button id="t1">rodar</button>
   <table style="margin-top:12px" id="t1out"></table>
 </section>
@@ -179,14 +181,15 @@ requestAnimationFrame(tick);
 
 /* ---------- sampling core -------------------------------------------- */
 
-// Oversamples with setTimeout (not rAF) so we can tell a genuinely new device
-// sample from the same value read twice. A sample counts as new when the
-// driver-provided timestamp moves, falling back to a value change when the
-// browser does not update timestamp.
+// Oversamples with setTimeout (not rAF) and records EVERY poll. Deriving
+// "new sample" is left to each test, because there are two different questions
+// hiding here: how often the device reports, and how often the value changes.
+// Conflating them undercounts the rate whenever the pedal is held still or
+// creeping across a single quantization step.
 function collect(ms, onDone) {
   const t0 = performance.now();
-  const samples = [];               // { t, v } — new samples only
-  let polls = 0, rafs = 0, lastTs = -1, lastV = null;
+  const polls = [];                 // { t, v, ts } for every poll
+  let rafs = 0;
 
   const rafLoop = () => { rafs++; if (performance.now() - t0 < ms) requestAnimationFrame(rafLoop); };
   requestAnimationFrame(rafLoop);
@@ -194,19 +197,32 @@ function collect(ms, onDone) {
   const poll = () => {
     const now = performance.now();
     const p = current();
-    polls++;
-    if (p && p.axes.length) {
-      const v = p.axes[axisIndex];
-      const ts = p.timestamp;
-      if (ts !== lastTs || v !== lastV) {
-        samples.push({ t: now - t0, v });
-        lastTs = ts; lastV = v;
-      }
-    }
+    if (p && p.axes.length) polls.push({ t: now - t0, v: p.axes[axisIndex], ts: p.timestamp });
     if (now - t0 < ms) setTimeout(poll, 0);
-    else onDone({ samples, polls, rafs, elapsed: now - t0 });
+    else onDone({ polls, rafs, elapsed: now - t0 });
   };
   poll();
+}
+
+/**
+ * Intervals between events, where an event is a poll whose `key` differs from
+ * the previous one. Returns the gaps in ms.
+ */
+function gaps(polls, key) {
+  const out = [];
+  let prev = null, prevT = null;
+  for (const p of polls) {
+    const k = key(p);
+    if (prev !== null && k !== prev) out.push(p.t - prevT);
+    if (prev === null || k !== prev) { prev = k; prevT = p.t; }
+  }
+  return out;
+}
+
+function pct(sorted, q) {
+  if (!sorted.length) return NaN;
+  const i = Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))));
+  return sorted[i];
 }
 
 function runTest(btn, ms, onDone) {
@@ -249,34 +265,46 @@ const cls = (v, good, ok) => v >= good ? "ok" : v >= ok ? "warn" : "bad";
 
 $("t1").onclick = e => runTest(e.target, 10000, r => {
   const secs = r.elapsed / 1000;
-  const rate = r.samples.length / secs;
+  const pollRate = r.polls.length / secs;
   const rafRate = r.rafs / secs;
 
-  const dts = [];
-  for (let i = 1; i < r.samples.length; i++) dts.push(r.samples[i].t - r.samples[i - 1].t);
-  const dtMed = dts.length ? median(dts) : 0;
-  const jitter = dts.length ? stdev(dts) : 0;
+  // Two independent readings of the same stream.
+  const tsGaps  = gaps(r.polls, p => p.ts);
+  const valGaps = gaps(r.polls, p => p.v);
+  const tsRate  = tsGaps.length / secs;
+  const valRate = valGaps.length / secs;
 
-  // If new samples arrive no faster than rAF, the read is display-locked.
-  const displayLocked = rate <= rafRate * 1.15;
+  const sortedTs = [...tsGaps].sort((a, b) => a - b);
+  const p50 = pct(sortedTs, 0.5), p90 = pct(sortedTs, 0.9), p99 = pct(sortedTs, 0.99);
 
-  results.rate = { rate, rafRate, dtMed, jitter, displayLocked, samples: r.samples.length, polls: r.polls };
+  // The device reports on its own clock; only call it display-locked when the
+  // update rate actually tracks the refresh rate.
+  const near = Math.abs(tsRate - rafRate) / rafRate < 0.15;
+  const diag = tsRate === 0
+    ? "timestamp nao atualiza neste browser — use a taxa de mudanca de valor como piso"
+    : near ? "preso ao display — a amostragem segue o refresh do monitor"
+    : tsRate > rafRate ? "independente do rAF — o dispositivo dita o ritmo"
+    : "limitado pelo dispositivo/driver, bem abaixo do que o rAF permitiria";
+
+  results.rate = { tsRate, valRate, pollRate, rafRate, p50, p90, p99, diag,
+                   polls: r.polls.length };
 
   table($("t1out"), [
-    ["taxa efetiva", rate.toFixed(1) + " Hz", cls(rate, 100, 55)],
-    ["taxa do rAF (monitor)", rafRate.toFixed(1) + " Hz"],
-    ["polls executados", r.polls + ` (${(r.polls / secs).toFixed(0)} Hz)`],
-    ["intervalo mediano", dtMed.toFixed(2) + " ms"],
-    ["jitter (dp)", jitter.toFixed(2) + " ms", jitter < dtMed * 0.25 ? "ok" : "warn"],
-    ["preso ao display?", displayLocked ? "sim — amostragem limitada pelo refresh" : "não — leitura independente do rAF",
-      displayLocked ? "warn" : "ok"],
+    ["taxa de report (timestamp)", tsRate.toFixed(1) + " Hz", cls(tsRate, 100, 55)],
+    ["taxa de mudanca de valor", valRate.toFixed(1) + " Hz",
+      "" ],
+    ["polling do teste", pollRate.toFixed(0) + " Hz"],
+    ["rAF (refresh do monitor)", rafRate.toFixed(1) + " Hz"],
+    ["intervalo p50 / p90 / p99", `${p50.toFixed(1)} / ${p90.toFixed(1)} / ${p99.toFixed(1)} ms`,
+      p99 < p50 * 3 ? "ok" : "warn"],
+    ["diagnostico", diag, near || tsRate >= 55 ? "ok" : "warn"],
   ]);
 });
 
 /* ---------- test 2: noise at rest ------------------------------------- */
 
 $("t2").onclick = e => runTest(e.target, 5000, r => {
-  const vs = r.samples.map(s => s.v);
+  const vs = r.polls.map(s => s.v);
   if (vs.length < 2) {
     table($("t2out"), [["resultado", "sinal totalmente estável — nenhuma variação detectada", "ok"]]);
     results.noise = { stdevPct: 0, p2pPct: 0, distinct: 1 };
@@ -300,7 +328,7 @@ $("t2").onclick = e => runTest(e.target, 5000, r => {
 /* ---------- test 3: resolution ---------------------------------------- */
 
 $("t3").onclick = e => runTest(e.target, 15000, r => {
-  const vs = [...new Set(r.samples.map(s => s.v))].sort((a, b) => a - b);
+  const vs = [...new Set(r.polls.map(s => s.v))].sort((a, b) => a - b);
   if (vs.length < 8) {
     table($("t3out"), [["resultado", "poucos valores distintos — repita percorrendo o curso completo", "bad"]]);
     return;
@@ -333,15 +361,16 @@ function updateVerdict() {
 
   // Worst-case second-derivative noise from quantization alone: one step
   // appearing and vanishing between consecutive samples.
-  const dt = rate.dtMed / 1000;
+  const effective = rate.tsRate > 0 ? rate.tsRate : rate.valRate;
+  const dt = rate.p50 / 1000;
   const jerkFloor = (resolution.stepPct / 100) / (dt * dt);   // curso/s² por degrau
 
   const rows = [
-    ["taxa efetiva", rate.rate.toFixed(0) + " Hz — " +
-      (rate.rate >= 100 ? "folgado para jerk"
-       : rate.rate >= 55 ? "classe 60Hz: forma ok, jerk exige filtro"
-       : "abaixo do aceitável"),
-      cls(rate.rate, 100, 55)],
+    ["taxa de report", effective.toFixed(0) + " Hz — " +
+      (effective >= 100 ? "folgado para jerk"
+       : effective >= 55 ? "classe 60Hz: forma ok, jerk exige filtro"
+       : "baixa — jerk fica dependente de filtro pesado"),
+      cls(effective, 100, 55)],
     ["resolução", resolution.bits.toFixed(1) + " bits — " +
       (resolution.bits >= 10 ? "jerk confiável"
        : resolution.bits >= 8 ? "jerk só como valor relativo ao próprio histórico"
@@ -351,10 +380,10 @@ function updateVerdict() {
       (noise.stdevPct < 0.1 ? "limpo" : noise.stdevPct < 0.5 ? "exige deadzone" : "sujo, deadzone obrigatória"),
       noise.stdevPct < 0.1 ? "ok" : noise.stdevPct < 0.5 ? "warn" : "bad"],
     ["piso de ruído do jerk", jerkFloor.toFixed(1) + " curso/s² por degrau de quantização"],
-    ["gate do M0", (rate.rate >= 55 && resolution.bits >= 8)
+    ["gate do M0", (effective >= 40 && resolution.bits >= 8)
       ? "PASSA — métricas de forma, chatter e consistência são sólidas; jerk fica normalizado por perfil de hardware"
       : "NÃO PASSA neste dispositivo — reavaliar escopo da métrica central",
-      (rate.rate >= 55 && resolution.bits >= 8) ? "ok" : "bad"],
+      (effective >= 40 && resolution.bits >= 8) ? "ok" : "bad"],
   ];
   table($("verdict"), rows);
 
