@@ -4,8 +4,23 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Sem agrupamento, a primeira semana do repo abriu seis PRs de uma vez.
+    # Ruído dessa ordem faz o dono parar de ler as atualizações, que é
+    # exatamente o oposto do objetivo.
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci
 
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+    # Major de devDependency entra em PR próprio, para ser lido com atenção.

@@ -1,0 +1,33 @@
+name: CodeQL
+
+# SAST. O `../CLAUDE.md` da pasta pede um estágio de análise estática no
+# pipeline; para JavaScript o CodeQL é o equivalente ao bandit dos projetos
+# Python, e é grátis em repositório público.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Regra nova do CodeQL pega código antigo — por isso o scan agendado,
+    # e não apenas o de push.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: github/codeql-action/init@988661ebb5e81487b3fb31b2185d2856c0a10679 # v4
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      # Sem build step: o CodeQL analisa os arquivos como estão.
+      - uses: github/codeql-action/analyze@988661ebb5e81487b3fb31b2185d2856c0a10679 # v4
