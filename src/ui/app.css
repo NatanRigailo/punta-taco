@@ -1,0 +1,109 @@
+:root {
+  color-scheme: dark;
+  --bg: #111;
+  --panel: #171717;
+  --line: #2a2a2a;
+  --fg: #e7e7e7;
+  --dim: #8a8a8a;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.6 var(--mono);
+  margin: 0;
+  padding: 48px 24px;
+}
+
+main { max-width: 720px; margin: 0 auto; }
+
+h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h2 {
+  font-size: 12px;
+  margin: 0 0 10px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.motto { color: var(--dim); font-style: italic; margin: 0 0 40px; }
+.lead { color: var(--dim); margin: 0 0 20px; }
+
+section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px 22px;
+  background: var(--panel);
+}
+
+.status { margin: 0 0 16px; }
+.status.waiting { color: var(--warn); }
+.status.ok { color: var(--dim); }
+
+.row { margin-bottom: 20px; }
+
+select, button {
+  background: #1e1e1e;
+  color: var(--fg);
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  padding: 7px 12px;
+  font: inherit;
+}
+
+select { max-width: 100%; }
+button { cursor: pointer; }
+button:hover:not(:disabled) { background: #2a2a2a; }
+button:disabled { opacity: 0.4; cursor: default; }
+
+.role + .role { margin-top: 22px; }
+
+.role-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.role-head strong { min-width: 100px; font-weight: 600; }
+
+.axis-text { color: var(--dim); flex: 1; }
+.axis-text.mapped { color: var(--ok); }
+
+.bar {
+  height: 10px;
+  background: #232323;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--ok);
+  transition: width 40ms linear;
+}
+
+.bar > i.idle { background: #333; }
+
+.hint {
+  display: block;
+  color: var(--dim);
+  font-size: 13px;
+  margin-top: 6px;
+  min-height: 1.4em;
+}
+
+footer {
+  color: var(--dim);
+  font-size: 13px;
+  margin-top: 28px;
+}
+
+a { color: var(--ok); }

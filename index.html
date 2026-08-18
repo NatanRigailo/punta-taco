@@ -2,46 +2,31 @@
 <html lang="pt-BR">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Punta Taco — treino de aplicação de pedal para sim racing</title>
-<meta name="description" content="Instrumento de treino de aplicação de pedal para sim racing: curva-alvo, traço realizado sobreposto e métricas que apontam onde a aplicação foi grosseira.">
-<style>
-  :root { color-scheme: dark; }
-  body { background:#111; color:#e7e7e7; margin:0; padding:15vh 24px 24px;
-         font:16px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; }
-  main { max-width:640px; margin:0 auto; }
-  h1 { font-size:28px; margin:0 0 6px; letter-spacing:-.01em; }
-  .motto { color:#8a8a8a; margin:0 0 28px; font-style:italic; }
-  p { margin:0 0 16px; }
-  a { color:#4ade80; }
-  .box { border:1px solid #2a2a2a; border-radius:6px; padding:16px 18px; margin-top:28px; }
-  .box h2 { font-size:13px; margin:0 0 8px; color:#8a8a8a;
-            text-transform:uppercase; letter-spacing:.08em; }
-  footer { color:#8a8a8a; font-size:13px; margin-top:36px; }
-</style>
+<title>Punta Taco</title>
+<meta name="description" content="Instrumento de treino de aplicação de pedal para sim racing.">
+<link rel="stylesheet" href="./src/ui/app.css">
 
 <main>
-  <h1>Punta Taco</h1>
-  <p class="motto">smooth is fast</p>
+  <header>
+    <h1>Punta Taco</h1>
+    <p class="motto">smooth is fast</p>
+  </header>
 
-  <p>Sim racer treina pedal <em>dentro</em> do sim, onde o feedback é indireto e vem misturado
-     com traçado, câmbio e setup. Aqui o pedal é isolado: uma curva-alvo, um traço realizado, e
-     números que apontam o erro. Ciclo de repetição de segundos, não de voltas.</p>
-
-  <p>Em desenvolvimento — atualmente no M0, validando se a leitura de pedaleira no browser
-     é boa o suficiente para as métricas que o projeto promete.</p>
-
-  <div class="box">
-    <h2>M0 — probe de hardware</h2>
-    <p>Mede taxa efetiva, resolução e ruído da sua pedaleira. Roda no Chrome ou Edge, leva
-       30 segundos e não instala nada.</p>
-    <p><a href="./probe/">rodar o probe →</a></p>
-    <p style="color:#8a8a8a;font-size:14px;margin:0">Se você tem pedaleira e um minuto sobrando,
-       rodar isso e mandar o resultado ajuda de verdade — quanto mais hardware diferente medido,
-       melhor o app funciona para todo mundo.</p>
-  </div>
+  <section>
+    <h2>Entrada</h2>
+    <p class="lead">
+      Escolha a pedaleira e diga qual eixo é cada pedal. Nada é assumido por padrão — a ordem dos
+      eixos muda de dispositivo para dispositivo, e mapear errado produz métrica do pedal errado.
+    </p>
+    <div id="input-panel"></div>
+  </section>
 
   <footer>
-    <a href="https://github.com/NatanRigailo/punta-taco">código no GitHub</a>
+    M0 — espinha dorsal.
+    <a href="./probe/">probe de hardware</a> ·
+    <a href="https://github.com/NatanRigailo/punta-taco">código</a>
   </footer>
 </main>
+
+<script type="module" src="./src/app.js"></script>
 </html>
