@@ -1,0 +1,14 @@
+{
+  "name": "punta-taco",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Instrumento de treino de aplicação de pedal para sim racing",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "serve": "python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

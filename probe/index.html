@@ -1,0 +1,368 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Punta Taco — M0 probe</title>
+<style>
+  :root { color-scheme: dark; --fg:#e7e7e7; --dim:#8a8a8a; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; }
+  body { background:#111; color:var(--fg); font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; margin:0; padding:24px; }
+  h1 { font-size:16px; margin:0 0 4px; }
+  h2 { font-size:14px; margin:24px 0 8px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
+  p.sub { color:var(--dim); margin:0 0 20px; }
+  section { border:1px solid #2a2a2a; border-radius:6px; padding:14px 16px; margin-bottom:14px; }
+  button { background:#1e1e1e; color:var(--fg); border:1px solid #3a3a3a; border-radius:4px;
+           padding:7px 13px; font:inherit; cursor:pointer; }
+  button:hover:not(:disabled) { background:#2a2a2a; }
+  button:disabled { opacity:.4; cursor:default; }
+  select { background:#1e1e1e; color:var(--fg); border:1px solid #3a3a3a; border-radius:4px;
+           padding:6px; font:inherit; max-width:100%; }
+  table { border-collapse:collapse; width:100%; }
+  td { padding:3px 12px 3px 0; vertical-align:top; }
+  td:first-child { color:var(--dim); white-space:nowrap; }
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  .hint { color:var(--dim); margin:0 0 10px; }
+  canvas { width:100%; height:110px; background:#0a0a0a; border:1px solid #2a2a2a; border-radius:4px; display:block; }
+  pre { background:#0a0a0a; border:1px solid #2a2a2a; border-radius:4px; padding:12px;
+        overflow:auto; max-height:280px; margin:0; white-space:pre-wrap; word-break:break-all; }
+  .bar { height:8px; background:#2a2a2a; border-radius:4px; overflow:hidden; margin-top:6px; }
+  .bar > i { display:block; height:100%; background:var(--ok); width:0; }
+</style>
+
+<h1>Punta Taco — M0 probe</h1>
+<p class="sub">Mede taxa efetiva, resolução e ruído da pedaleira via Gamepad API. Descartável: só produz o número que decide se jerk RMS é métrica viável.</p>
+
+<section>
+  <h2 style="margin-top:0">Dispositivo</h2>
+  <p class="hint">Chrome/Edge só expõem o gamepad depois de um input. Pressione um pedal ou botão.</p>
+  <div>
+    <select id="pad"><option>aguardando input…</option></select>
+    <select id="axis" style="margin-left:8px"></select>
+  </div>
+  <table style="margin-top:12px">
+    <tr><td>valor bruto</td><td id="raw">—</td></tr>
+    <tr><td>normalizado</td><td id="norm">—</td></tr>
+  </table>
+  <div class="bar"><i id="barFill"></i></div>
+  <canvas id="trace" width="900" height="110" style="margin-top:12px"></canvas>
+</section>
+
+<section>
+  <h2 style="margin-top:0">Teste 1 — taxa efetiva <span class="hint">10s</span></h2>
+  <p class="hint">Pressione e solte o pedal continuamente durante o teste, em movimento suave e contínuo.
+     Compara amostras novas de verdade contra frequência de polling — responde se a leitura está presa ao refresh do monitor.</p>
+  <button id="t1">rodar</button>
+  <table style="margin-top:12px" id="t1out"></table>
+</section>
+
+<section>
+  <h2 style="margin-top:0">Teste 2 — ruído em repouso <span class="hint">5s</span></h2>
+  <p class="hint">Tire o pé do pedal e não encoste na mesa.</p>
+  <button id="t2">rodar</button>
+  <table style="margin-top:12px" id="t2out"></table>
+</section>
+
+<section>
+  <h2 style="margin-top:0">Teste 3 — resolução <span class="hint">15s</span></h2>
+  <p class="hint">Percorra o curso inteiro do pedal <em>bem devagar</em>, do zero ao fundo e de volta, umas duas vezes.
+     Quanto mais lento, melhor a estimativa do degrau de quantização.</p>
+  <button id="t3">rodar</button>
+  <table style="margin-top:12px" id="t3out"></table>
+</section>
+
+<section>
+  <h2 style="margin-top:0">Veredito</h2>
+  <table id="verdict"><tr><td>—</td><td>rode os três testes</td></tr></table>
+  <pre id="report" style="margin-top:12px">—</pre>
+  <button id="copy" style="margin-top:10px" disabled>copiar relatório</button>
+</section>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const results = { device: null, rate: null, noise: null, resolution: null };
+
+let padIndex = null, axisIndex = 0;
+
+/* ---------- device discovery ---------------------------------------- */
+
+// Gamepads are a snapshot: getGamepads() must be called on every read.
+function pads() {
+  return [...navigator.getGamepads()].filter(Boolean);
+}
+
+function refreshDevices() {
+  const list = pads();
+  const sel = $("pad");
+  const signature = list.map(p => p.index + ":" + p.id).join("|");
+  if (sel.dataset.signature === signature) return;
+  sel.dataset.signature = signature;
+  sel.innerHTML = "";
+  if (!list.length) {
+    sel.innerHTML = "<option>aguardando input…</option>";
+    padIndex = null;
+    return;
+  }
+  for (const p of list) {
+    const o = document.createElement("option");
+    o.value = p.index;
+    o.textContent = `[${p.index}] ${p.id}`;
+    sel.append(o);
+  }
+  if (padIndex === null) padIndex = list[0].index;
+  sel.value = padIndex;
+  refreshAxes();
+}
+
+function refreshAxes() {
+  const p = current();
+  const sel = $("axis");
+  if (!p) return;
+  if (sel.dataset.count === String(p.axes.length)) return;
+  sel.dataset.count = String(p.axes.length);
+  sel.innerHTML = "";
+  p.axes.forEach((_, i) => {
+    const o = document.createElement("option");
+    o.value = i;
+    o.textContent = "eixo " + i;
+    sel.append(o);
+  });
+  sel.value = axisIndex = 0;
+}
+
+function current() {
+  return padIndex === null ? null : pads().find(p => p.index === padIndex) || null;
+}
+
+$("pad").onchange = e => { padIndex = +e.target.value; $("axis").dataset.count = ""; refreshAxes(); };
+$("axis").onchange = e => { axisIndex = +e.target.value; };
+addEventListener("gamepadconnected", refreshDevices);
+addEventListener("gamepaddisconnected", refreshDevices);
+
+/* ---------- live view ------------------------------------------------ */
+
+const ctx = $("trace").getContext("2d");
+const history = new Array(900).fill(null);
+
+function draw() {
+  const w = 900, h = 110;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = "#222";
+  ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+  ctx.strokeStyle = "#4ade80";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  let started = false;
+  for (let x = 0; x < w; x++) {
+    const v = history[x];
+    if (v === null) { started = false; continue; }
+    const y = h - 4 - v * (h - 8);           // v is 0..1
+    started ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    started = true;
+  }
+  ctx.stroke();
+}
+
+function tick() {
+  refreshDevices();
+  const p = current();
+  if (p && p.axes.length) {
+    const raw = p.axes[axisIndex];
+    const norm = (raw + 1) / 2;              // axes report -1..1
+    $("raw").textContent = raw.toFixed(6);
+    $("norm").textContent = (norm * 100).toFixed(2) + "%";
+    $("barFill").style.width = (norm * 100).toFixed(1) + "%";
+    history.push(norm); history.shift();
+  }
+  draw();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ---------- sampling core -------------------------------------------- */
+
+// Oversamples with setTimeout (not rAF) so we can tell a genuinely new device
+// sample from the same value read twice. A sample counts as new when the
+// driver-provided timestamp moves, falling back to a value change when the
+// browser does not update timestamp.
+function collect(ms, onDone) {
+  const t0 = performance.now();
+  const samples = [];               // { t, v } — new samples only
+  let polls = 0, rafs = 0, lastTs = -1, lastV = null;
+
+  const rafLoop = () => { rafs++; if (performance.now() - t0 < ms) requestAnimationFrame(rafLoop); };
+  requestAnimationFrame(rafLoop);
+
+  const poll = () => {
+    const now = performance.now();
+    const p = current();
+    polls++;
+    if (p && p.axes.length) {
+      const v = p.axes[axisIndex];
+      const ts = p.timestamp;
+      if (ts !== lastTs || v !== lastV) {
+        samples.push({ t: now - t0, v });
+        lastTs = ts; lastV = v;
+      }
+    }
+    if (now - t0 < ms) setTimeout(poll, 0);
+    else onDone({ samples, polls, rafs, elapsed: now - t0 });
+  };
+  poll();
+}
+
+function runTest(btn, ms, onDone) {
+  if (!current()) { alert("Nenhum gamepad detectado. Pressione um pedal ou botão primeiro."); return; }
+  const all = document.querySelectorAll("button");
+  all.forEach(b => b.disabled = true);
+  const label = btn.textContent;
+  const start = performance.now();
+  const countdown = setInterval(() => {
+    btn.textContent = ((ms - (performance.now() - start)) / 1000).toFixed(1) + "s";
+  }, 100);
+  collect(ms, r => {
+    clearInterval(countdown);
+    btn.textContent = label;
+    all.forEach(b => b.disabled = false);
+    onDone(r);
+    updateVerdict();
+  });
+}
+
+/* ---------- stats helpers -------------------------------------------- */
+
+const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+const stdev = a => { const m = mean(a); return Math.sqrt(mean(a.map(x => (x - m) ** 2))); };
+
+function median(a) {
+  const s = [...a].sort((x, y) => x - y);
+  const h = s.length >> 1;
+  return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
+}
+
+function table(el, rows) {
+  el.innerHTML = rows.map(([k, v, cls]) =>
+    `<tr><td>${k}</td><td class="${cls || ""}">${v}</td></tr>`).join("");
+}
+
+const cls = (v, good, ok) => v >= good ? "ok" : v >= ok ? "warn" : "bad";
+
+/* ---------- test 1: effective rate ------------------------------------ */
+
+$("t1").onclick = e => runTest(e.target, 10000, r => {
+  const secs = r.elapsed / 1000;
+  const rate = r.samples.length / secs;
+  const rafRate = r.rafs / secs;
+
+  const dts = [];
+  for (let i = 1; i < r.samples.length; i++) dts.push(r.samples[i].t - r.samples[i - 1].t);
+  const dtMed = dts.length ? median(dts) : 0;
+  const jitter = dts.length ? stdev(dts) : 0;
+
+  // If new samples arrive no faster than rAF, the read is display-locked.
+  const displayLocked = rate <= rafRate * 1.15;
+
+  results.rate = { rate, rafRate, dtMed, jitter, displayLocked, samples: r.samples.length, polls: r.polls };
+
+  table($("t1out"), [
+    ["taxa efetiva", rate.toFixed(1) + " Hz", cls(rate, 100, 55)],
+    ["taxa do rAF (monitor)", rafRate.toFixed(1) + " Hz"],
+    ["polls executados", r.polls + ` (${(r.polls / secs).toFixed(0)} Hz)`],
+    ["intervalo mediano", dtMed.toFixed(2) + " ms"],
+    ["jitter (dp)", jitter.toFixed(2) + " ms", jitter < dtMed * 0.25 ? "ok" : "warn"],
+    ["preso ao display?", displayLocked ? "sim — amostragem limitada pelo refresh" : "não — leitura independente do rAF",
+      displayLocked ? "warn" : "ok"],
+  ]);
+});
+
+/* ---------- test 2: noise at rest ------------------------------------- */
+
+$("t2").onclick = e => runTest(e.target, 5000, r => {
+  const vs = r.samples.map(s => s.v);
+  if (vs.length < 2) {
+    table($("t2out"), [["resultado", "sinal totalmente estável — nenhuma variação detectada", "ok"]]);
+    results.noise = { stdevPct: 0, p2pPct: 0, distinct: 1 };
+    return;
+  }
+  // Axis range is 2.0 (-1..1); express noise as % of full pedal travel.
+  const sd = stdev(vs) / 2 * 100;
+  const p2p = (Math.max(...vs) - Math.min(...vs)) / 2 * 100;
+  const distinct = new Set(vs).size;
+
+  results.noise = { stdevPct: sd, p2pPct: p2p, distinct };
+
+  table($("t2out"), [
+    ["desvio-padrão", sd.toFixed(4) + " % do curso", sd < 0.1 ? "ok" : sd < 0.5 ? "warn" : "bad"],
+    ["pico a pico", p2p.toFixed(4) + " % do curso", p2p < 0.3 ? "ok" : p2p < 1 ? "warn" : "bad"],
+    ["valores distintos", distinct],
+    ["amostras", vs.length],
+  ]);
+});
+
+/* ---------- test 3: resolution ---------------------------------------- */
+
+$("t3").onclick = e => runTest(e.target, 15000, r => {
+  const vs = [...new Set(r.samples.map(s => s.v))].sort((a, b) => a - b);
+  if (vs.length < 8) {
+    table($("t3out"), [["resultado", "poucos valores distintos — repita percorrendo o curso completo", "bad"]]);
+    return;
+  }
+  const diffs = [];
+  for (let i = 1; i < vs.length; i++) diffs.push(vs[i] - vs[i - 1]);
+
+  // Median gap between observed levels approximates one quantization step;
+  // the minimum is too easily corrupted by a single noisy reading.
+  const step = median(diffs);
+  const span = vs[vs.length - 1] - vs[0];
+  const bits = Math.log2(2 / step);          // steps across the full -1..1 range
+  const stepPct = step / 2 * 100;
+
+  results.resolution = { stepPct, bits, distinct: vs.length, spanPct: span / 2 * 100 };
+
+  table($("t3out"), [
+    ["curso percorrido", (span / 2 * 100).toFixed(1) + " % do range", span > 1.6 ? "ok" : "warn"],
+    ["níveis distintos", vs.length],
+    ["degrau (mediana)", stepPct.toFixed(4) + " % do curso"],
+    ["resolução efetiva", bits.toFixed(1) + " bits", cls(bits, 10, 8)],
+  ]);
+});
+
+/* ---------- verdict ---------------------------------------------------- */
+
+function updateVerdict() {
+  const { rate, noise, resolution } = results;
+  if (!rate || !noise || !resolution) return;
+
+  // Worst-case second-derivative noise from quantization alone: one step
+  // appearing and vanishing between consecutive samples.
+  const dt = rate.dtMed / 1000;
+  const jerkFloor = (resolution.stepPct / 100) / (dt * dt);   // curso/s² por degrau
+
+  const rows = [
+    ["taxa efetiva", rate.rate.toFixed(0) + " Hz — " +
+      (rate.rate >= 100 ? "folgado para jerk"
+       : rate.rate >= 55 ? "classe 60Hz: forma ok, jerk exige filtro"
+       : "abaixo do aceitável"),
+      cls(rate.rate, 100, 55)],
+    ["resolução", resolution.bits.toFixed(1) + " bits — " +
+      (resolution.bits >= 10 ? "jerk confiável"
+       : resolution.bits >= 8 ? "jerk só como valor relativo ao próprio histórico"
+       : "jerk não é métrica publicável neste hardware"),
+      cls(resolution.bits, 10, 8)],
+    ["ruído em repouso", noise.stdevPct.toFixed(3) + " % — " +
+      (noise.stdevPct < 0.1 ? "limpo" : noise.stdevPct < 0.5 ? "exige deadzone" : "sujo, deadzone obrigatória"),
+      noise.stdevPct < 0.1 ? "ok" : noise.stdevPct < 0.5 ? "warn" : "bad"],
+    ["piso de ruído do jerk", jerkFloor.toFixed(1) + " curso/s² por degrau de quantização"],
+    ["gate do M0", (rate.rate >= 55 && resolution.bits >= 8)
+      ? "PASSA — métricas de forma, chatter e consistência são sólidas; jerk fica normalizado por perfil de hardware"
+      : "NÃO PASSA neste dispositivo — reavaliar escopo da métrica central",
+      (rate.rate >= 55 && resolution.bits >= 8) ? "ok" : "bad"],
+  ];
+  table($("verdict"), rows);
+
+  const p = current();
+  results.device = { id: p ? p.id : null, axis: axisIndex, ua: navigator.userAgent };
+  $("report").textContent = JSON.stringify(results, null, 2);
+  $("copy").disabled = false;
+}
+
+$("copy").onclick = () => navigator.clipboard.writeText($("report").textContent);
+</script>
