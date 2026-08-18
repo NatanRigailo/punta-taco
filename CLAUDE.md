@@ -52,13 +52,20 @@ dependência de runtime sem discutir antes: isso é decisão de arquitetura, nã
 
 ## Estado atual
 
-**Milestone:** M0 — gate de captura.
+**Milestone:** M0 — espinha dorsal. Issues #7 a #13 abertas.
+
+**Gate do M0: PASSOU.** Medido na PXN VD4 (ver `docs/medicoes.md`): ~50Hz de report em cadência
+regular, 8,66 bits de resolução, ruído zero em repouso. Métricas de forma, chatter, linearidade e
+consistência são sólidas; jerk é utilizável apenas como valor relativo ao histórico do usuário.
+
+**Regra que saiu da medição:** amostrar em passo fixo de **20ms e nunca mais rápido** — o ruído de
+quantização no jerk escala com `degrau / dt²`, então oversampling piora a métrica central.
 
 **O que já funciona:**
-- `/probe/` — mede taxa efetiva, resolução e ruído da pedaleira, e emite veredito do gate
+- `/probe/` — mede taxa, resolução e ruído, e emite veredito do gate
 
 **Próximo passo:**
-- Rodar o probe em hardware real (G29, SRP Lite, PXN) e decidir se a métrica central se sustenta
+- #7, módulo de input — é a fundação de todo o resto
 
 ---
 
