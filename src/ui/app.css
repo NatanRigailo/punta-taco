@@ -170,3 +170,12 @@ section + section { margin-top: 16px; }
   border-radius: 4px;
   display: block;
 }
+
+.warnings {
+  margin: 14px 0 0;
+  padding-left: 20px;
+  color: var(--warn);
+  font-size: 14px;
+}
+
+.warnings li + li { margin-top: 5px; }
