@@ -5,6 +5,7 @@
   "description": "Instrumento de treino de aplicação de pedal para sim racing",
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "typecheck": "tsc --noEmit",
     "serve": "python3 -m http.server 8080"
   },

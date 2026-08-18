@@ -1,5 +1,5 @@
 /**
- * Device selection and pedal mapping panel.
+ * Device selection, pedal mapping and calibration.
  *
  * Deliberately does its own rendering with plain DOM: the panel is small, and
  * the live readout runs on the animation frame, which is easier to reason about
@@ -12,12 +12,24 @@ import {
   assignmentFor,
   clearAssignment,
   detectAxis,
+  onAssignmentChange,
   pruneMissingDevices,
   readPedal,
 } from "../input/mapping.js";
+import {
+  calibrationFor,
+  captureCalibration,
+  clearCalibration,
+  describeCalibration,
+  isCalibrated,
+  normalise,
+  setCalibration,
+} from "../input/calibration.js";
 
 /** @typedef {import("../input/devices.js").DeviceInfo} DeviceInfo */
 /** @typedef {import("../input/mapping.js").PedalRole} PedalRole */
+
+/** @typedef {{ role: PedalRole, kind: "detect" | "calibrate" }} BusyState */
 
 /** @type {{ role: PedalRole, label: string }[]} */
 const ROLES = [
@@ -39,6 +51,28 @@ function el(tag, attrs = {}, children = []) {
 }
 
 /**
+ * @param {string} text
+ * @returns {HTMLButtonElement}
+ */
+function button(text) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.textContent = text;
+  return node;
+}
+
+/**
+ * @typedef {object} RoleView
+ * @property {HTMLElement} axisText
+ * @property {HTMLElement} fill
+ * @property {HTMLElement} marker
+ * @property {HTMLButtonElement} detectButton
+ * @property {HTMLButtonElement} calibrateButton
+ * @property {HTMLElement} hint
+ * @property {HTMLElement} summary
+ */
+
+/**
  * @param {HTMLElement} root
  * @returns {() => void} Teardown.
  */
@@ -47,88 +81,155 @@ export function mountInputPanel(root) {
   let devices = [];
   /** @type {number | null} */
   let selected = null;
-  /** @type {PedalRole | null} */
-  let detecting = null;
+  /** @type {BusyState | null} */
+  let busy = null;
 
   const status = el("p", { class: "status" });
   const select = document.createElement("select");
   select.className = "device-select";
   const deviceRow = el("div", { class: "row" }, [select]);
 
-  /** @type {Map<PedalRole, { axisText: HTMLElement, fill: HTMLElement, button: HTMLButtonElement, hint: HTMLElement }>} */
+  /** @type {Map<PedalRole, RoleView>} */
   const roleViews = new Map();
-
   const roleList = el("div", { class: "roles" });
+
   for (const { role, label } of ROLES) {
     const axisText = el("span", { class: "axis-text", text: "não mapeado" });
     const fill = el("i");
-    const bar = el("div", { class: "bar" }, [fill]);
-    const button = document.createElement("button");
-    button.textContent = "detectar";
-    button.type = "button";
+    const marker = el("u", { class: "deadzone" });
+    const bar = el("div", { class: "bar" }, [fill, marker]);
+    const detectButton = button("detectar eixo");
+    const calibrateButton = button("calibrar");
     const hint = el("span", { class: "hint" });
+    const summary = el("span", { class: "summary" });
 
-    button.addEventListener("click", () => void runDetection(role));
+    detectButton.addEventListener("click", () => void runDetection(role));
+    calibrateButton.addEventListener("click", () => void runCalibration(role));
 
     roleList.append(
       el("div", { class: "role" }, [
         el("div", { class: "role-head" }, [
           el("strong", { text: label }),
           axisText,
-          button,
+          detectButton,
+          calibrateButton,
         ]),
         bar,
         hint,
+        summary,
       ]),
     );
-    roleViews.set(role, { axisText, fill, button, hint });
+
+    roleViews.set(role, {
+      axisText, fill, marker, detectButton, calibrateButton, hint, summary,
+    });
   }
 
-  root.append(status, deviceRow, roleList);
+  const readiness = el("p", { class: "readiness" });
+  root.append(status, deviceRow, roleList, readiness);
 
   /** @param {PedalRole} role */
   async function runDetection(role) {
-    if (selected === null || detecting) return;
-    detecting = role;
+    if (selected === null || busy) return;
+    busy = { role, kind: "detect" };
     const view = roleViews.get(role);
-    syncButtons();
+    syncControls();
 
     try {
       const result = await detectAxis(selected, {
         onProgress: (remaining) => {
-          if (view) view.hint.textContent = `pressione o pedal até o fundo — ${(remaining / 1000).toFixed(1)}s`;
+          if (view) {
+            view.hint.textContent = `pressione o pedal até o fundo — ${(remaining / 1000).toFixed(1)}s`;
+          }
         },
       });
       assign(role, selected, result.axis);
-      if (view) {
-        view.hint.textContent =
-          `eixo ${result.axis}, curso de ${(result.travel / 2 * 100).toFixed(0)}%` +
-          (result.runnerUp > 0.05 ? ` (segundo colocado: ${(result.runnerUp / 2 * 100).toFixed(0)}%)` : "");
-      }
+      if (view) view.hint.textContent = `eixo ${result.axis} identificado — agora calibre`;
     } catch (err) {
-      if (view) view.hint.textContent = err instanceof Error ? err.message : String(err);
+      if (view) view.hint.textContent = messageOf(err);
       clearAssignment(role);
     } finally {
-      detecting = null;
-      syncButtons();
+      busy = null;
+      syncControls();
       renderRoles();
     }
   }
 
-  function syncButtons() {
+  /** @param {PedalRole} role */
+  async function runCalibration(role) {
+    const assignment = assignmentFor(role);
+    if (!assignment || busy) return;
+    busy = { role, kind: "calibrate" };
+    const view = roleViews.get(role);
+    clearCalibration(role);
+    syncControls();
+
+    try {
+      const calibration = await captureCalibration(assignment.deviceIndex, assignment.axis, {
+        onPhase: (phase, remaining) => {
+          if (!view) return;
+          view.hint.textContent = phase === "rest"
+            ? `tire o pé do pedal — ${(remaining / 1000).toFixed(1)}s`
+            : `percorra o curso inteiro, do zero ao fundo — ${(remaining / 1000).toFixed(1)}s`;
+        },
+      });
+      setCalibration(role, calibration);
+      if (view) view.hint.textContent = "calibrado";
+    } catch (err) {
+      if (view) view.hint.textContent = messageOf(err);
+    } finally {
+      busy = null;
+      syncControls();
+      renderRoles();
+    }
+  }
+
+  function syncControls() {
     for (const [role, view] of roleViews) {
-      const busy = detecting !== null;
-      view.button.disabled = selected === null || busy;
-      view.button.textContent = detecting === role ? "detectando…" : "detectar";
+      const running = busy !== null;
+      view.detectButton.disabled = selected === null || running;
+      view.calibrateButton.disabled = running || assignmentFor(role) === null;
+
+      const mine = busy && busy.role === role ? busy.kind : null;
+      view.detectButton.textContent = mine === "detect" ? "detectando…" : "detectar eixo";
+      view.calibrateButton.textContent = mine === "calibrate"
+        ? "calibrando…"
+        : isCalibrated(role) ? "recalibrar" : "calibrar";
     }
   }
 
   function renderRoles() {
     for (const [role, view] of roleViews) {
-      const a = assignmentFor(role);
-      view.axisText.textContent = a ? `eixo ${a.axis}` : "não mapeado";
-      view.axisText.classList.toggle("mapped", a !== null);
+      const assignment = assignmentFor(role);
+      view.axisText.textContent = assignment ? `eixo ${assignment.axis}` : "não mapeado";
+      view.axisText.classList.toggle("mapped", assignment !== null);
+
+      const calibration = calibrationFor(role);
+      if (calibration) {
+        const d = describeCalibration(calibration);
+        view.summary.textContent =
+          `curso ${d.travelPct.toFixed(0)}% do eixo · deadzone ${d.deadzonePct.toFixed(1)}%` +
+          (d.inverted ? " · eixo invertido, corrigido" : "");
+        view.marker.style.width = `${d.deadzonePct.toFixed(2)}%`;
+        view.marker.hidden = false;
+      } else {
+        view.summary.textContent = assignment ? "sem calibração — leitura ainda é o valor bruto" : "";
+        view.marker.hidden = true;
+      }
     }
+    renderReadiness();
+  }
+
+  function renderReadiness() {
+    const missing = ROLES.filter(({ role }) => !isCalibrated(role));
+    if (missing.length === 0) {
+      readiness.textContent = "Freio e acelerador calibrados — pronto para treinar.";
+      readiness.className = "readiness ok";
+      return;
+    }
+    const names = missing.map((m) => m.label.toLowerCase()).join(" e ");
+    readiness.textContent = `Falta calibrar: ${names}. Nenhum drill roda sem calibração.`;
+    readiness.className = "readiness pending";
   }
 
   function renderDevices() {
@@ -139,7 +240,7 @@ export function mountInputPanel(root) {
       deviceRow.hidden = true;
       roleList.hidden = true;
       selected = null;
-      syncButtons();
+      syncControls();
       return;
     }
 
@@ -148,8 +249,7 @@ export function mountInputPanel(root) {
     deviceRow.hidden = false;
     roleList.hidden = false;
 
-    const stillThere = devices.some((d) => d.index === selected);
-    if (!stillThere) {
+    if (!devices.some((d) => d.index === selected)) {
       const first = devices[0];
       selected = first ? first.index : null;
     }
@@ -162,17 +262,22 @@ export function mountInputPanel(root) {
       select.append(option);
     }
     if (selected !== null) select.value = String(selected);
-    syncButtons();
+    syncControls();
   }
 
   select.addEventListener("change", () => {
     selected = Number(select.value);
-    syncButtons();
+    syncControls();
+  });
+
+  // Remapping an axis invalidates the calibration captured for the old one.
+  const unassign = onAssignmentChange((role) => {
+    clearCalibration(role);
+    renderRoles();
   });
 
   const unwatch = watchDevices((next) => {
     devices = next;
-    // A device that vanished must not leave a role pointing at a dead axis.
     for (const role of pruneMissingDevices()) {
       const view = roleViews.get(role);
       if (view) view.hint.textContent = "dispositivo desconectado — mapeie de novo";
@@ -185,9 +290,15 @@ export function mountInputPanel(root) {
   const tick = () => {
     for (const [role, view] of roleViews) {
       const raw = readPedal(role);
-      const normalised = raw === null ? 0 : (raw + 1) / 2;
-      view.fill.style.width = `${(normalised * 100).toFixed(1)}%`;
+      const calibration = calibrationFor(role);
+      const value = raw === null
+        ? 0
+        : calibration
+          ? normalise(calibration, raw)
+          : (raw + 1) / 2;
+      view.fill.style.width = `${(value * 100).toFixed(1)}%`;
       view.fill.classList.toggle("idle", raw === null);
+      view.fill.classList.toggle("raw", raw !== null && calibration === null);
     }
     frame = requestAnimationFrame(tick);
   };
@@ -199,6 +310,15 @@ export function mountInputPanel(root) {
   return () => {
     cancelAnimationFrame(frame);
     unwatch();
+    unassign();
     root.replaceChildren();
   };
+}
+
+/**
+ * @param {unknown} err
+ * @returns {string}
+ */
+function messageOf(err) {
+  return err instanceof Error ? err.message : String(err);
 }

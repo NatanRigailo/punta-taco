@@ -26,6 +26,9 @@ sobreposto, e métricas que apontam onde a aplicação foi grosseira. Escopo com
 ## Stack
 
 - **Linguagem:** JavaScript (ES modules), tipado via JSDoc e verificado com `tsc --noEmit`
+- **Testes:** runner nativo do Node (`node --test`), zero pacotes. Arquivos `*.test.js` ao lado do
+  módulo, fora do typecheck — importar `node:test` exigiria `@types/node`, e um pacote a mais
+  custa mais que cobertura de tipo em teste
 - **Render:** Canvas 2D, sem framework
 - **Input:** Gamepad API
 - **Persistência:** IndexedDB (local); Supabase a partir do M2, só para ranking

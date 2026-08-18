@@ -26,3 +26,4 @@ jobs:
       # resolve something new and rewrite the lockfile in CI.
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
+      - run: npm test
