@@ -20,12 +20,26 @@
  */
 
 /**
+ * @typedef {object} HardwareMeasurement
+ * @property {number} reportRateHz
+ * @property {number} medianGapMs
+ * @property {number} stepFraction    Quantisation step over calibrated travel.
+ * @property {number} bits
+ * @property {number} noiseFraction
+ * @property {"full" | "partial" | "limited"} grade
+ * @property {boolean} jerkPublishable
+ * @property {number} windowPoints    Filter window this hardware requires.
+ * @property {number} measuredAt
+ */
+
+/**
  * @typedef {object} HardwareProfile
  * @property {string} deviceId   Gamepad id string — the only stable identifier.
  * @property {string} name       Editable label shown to the user.
  * @property {number} createdAt
  * @property {number} updatedAt
  * @property {{ brake?: PedalEntry, throttle?: PedalEntry }} pedals
+ * @property {HardwareMeasurement} [hardware]  Absent until the diagnosis runs.
  */
 
 export const EXPORT_FORMAT = "punta-taco/profiles";
@@ -79,6 +93,9 @@ export function withoutPedal(profile, role, now = Date.now()) {
   delete pedals[role];
   return { ...profile, updatedAt: now, pedals };
 }
+
+/** @type {HardwareMeasurement["grade"][]} */
+const GRADES = ["full", "partial", "limited"];
 
 /**
  * @param {unknown} value
@@ -156,6 +173,39 @@ function parsePedalEntry(value, path) {
 }
 
 /**
+ * @param {unknown} value
+ * @param {string} path
+ * @returns {HardwareMeasurement}
+ */
+function parseHardware(value, path) {
+  const raw = requireObject(value, path);
+  const grade = raw["grade"];
+  if (typeof grade !== "string" || !GRADES.includes(/** @type {any} */ (grade))) {
+    throw new Error(`${path}.grade deve ser um de: ${GRADES.join(", ")}`);
+  }
+  if (typeof raw["jerkPublishable"] !== "boolean") {
+    throw new Error(`${path}.jerkPublishable deve ser booleano`);
+  }
+
+  const stepFraction = requireFiniteNumber(raw["stepFraction"], `${path}.stepFraction`);
+  if (stepFraction <= 0 || stepFraction > 1) {
+    throw new Error(`${path}.stepFraction deve ficar entre 0 e 1`);
+  }
+
+  return {
+    reportRateHz: requireFiniteNumber(raw["reportRateHz"], `${path}.reportRateHz`),
+    medianGapMs: requireFiniteNumber(raw["medianGapMs"], `${path}.medianGapMs`),
+    stepFraction,
+    bits: requireFiniteNumber(raw["bits"], `${path}.bits`),
+    noiseFraction: requireFiniteNumber(raw["noiseFraction"], `${path}.noiseFraction`),
+    grade: /** @type {HardwareMeasurement["grade"]} */ (grade),
+    jerkPublishable: raw["jerkPublishable"],
+    windowPoints: requireFiniteNumber(raw["windowPoints"], `${path}.windowPoints`),
+    measuredAt: requireFiniteNumber(raw["measuredAt"], `${path}.measuredAt`),
+  };
+}
+
+/**
  * Validates untrusted data into a profile, or throws explaining what is wrong.
  *
  * @param {unknown} value
@@ -178,7 +228,24 @@ export function parseProfile(value, path = "perfil") {
     pedals[role] = parsePedalEntry(entry, `${path}.pedals.${role}`);
   }
 
-  return { deviceId, name, createdAt, updatedAt, pedals };
+  /** @type {HardwareProfile} */
+  const profile = { deviceId, name, createdAt, updatedAt, pedals };
+
+  const hardware = raw["hardware"];
+  if (hardware !== undefined) {
+    profile.hardware = parseHardware(hardware, `${path}.hardware`);
+  }
+  return profile;
+}
+
+/**
+ * @param {HardwareProfile} profile
+ * @param {HardwareMeasurement} hardware
+ * @param {number} [now]
+ * @returns {HardwareProfile}
+ */
+export function withHardware(profile, hardware, now = Date.now()) {
+  return { ...profile, updatedAt: now, hardware };
 }
 
 /**

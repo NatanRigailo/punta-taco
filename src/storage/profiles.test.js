@@ -16,9 +16,22 @@ import {
   parseProfile,
   parseProfilesExport,
   serialiseProfiles,
+  withHardware,
   withPedal,
   withoutPedal,
 } from "./profiles.js";
+
+const hardware = {
+  reportRateHz: 51.8,
+  medianGapMs: 19.3,
+  stepFraction: 0.0025,
+  bits: 8.64,
+  noiseFraction: 0,
+  grade: "full",
+  jerkPublishable: true,
+  windowPoints: 5,
+  measuredAt: 5000,
+};
 
 const calibration = { restRaw: -1, pressedRaw: 1, deadzone: 0.01, restNoise: 0.002 };
 
@@ -133,4 +146,53 @@ test("import aponta qual perfil da lista está quebrado", () => {
     profiles: [validProfile(), validProfile({ name: 42 })],
   });
   assert.throws(() => parseProfilesExport(payload), /perfil\[1\]\.name/);
+});
+
+test("withHardware anexa a medição sem tocar no resto do perfil", () => {
+  const base = withPedal(createProfile("dev", "PXN", 1000), "brake", {
+    axis: 3,
+    calibration,
+  }, 2000);
+
+  const measured = withHardware(base, /** @type {any} */ (hardware), 3000);
+  assert.equal(measured.hardware?.grade, "full");
+  assert.equal(measured.pedals.brake?.axis, 3, "os pedais não deviam mudar");
+  assert.equal(measured.updatedAt, 3000);
+  assert.equal(base.hardware, undefined, "o original foi mutado");
+});
+
+test("perfil sem medição continua válido", () => {
+  // A medição só existe depois que o diagnóstico roda; um perfil antigo,
+  // gravado antes desta funcionalidade, não pode ser recusado.
+  const parsed = parseProfile(validProfile());
+  assert.equal(parsed.hardware, undefined);
+});
+
+test("parseProfile aceita e devolve a medição de hardware", () => {
+  const parsed = parseProfile(validProfile({ hardware }));
+  assert.equal(parsed.hardware?.grade, "full");
+  assert.equal(parsed.hardware?.jerkPublishable, true);
+  assert.equal(parsed.hardware?.windowPoints, 5);
+});
+
+test("parseProfile rejeita medição de hardware incoerente", () => {
+  const withHw = (/** @type {Record<string, unknown>} */ overrides) =>
+    validProfile({ hardware: { ...hardware, ...overrides } });
+
+  assert.throws(() => parseProfile(withHw({ grade: "otimo" })), /grade/);
+  assert.throws(() => parseProfile(withHw({ jerkPublishable: "sim" })), /jerkPublishable/);
+  // Degrau maior que o curso inteiro, ou zero, nao descrevem hardware nenhum.
+  assert.throws(() => parseProfile(withHw({ stepFraction: 0 })), /stepFraction/);
+  assert.throws(() => parseProfile(withHw({ stepFraction: 1.5 })), /stepFraction/);
+  assert.throws(() => parseProfile(withHw({ bits: "oito" })), /bits/);
+});
+
+test("a medição sobrevive ao round-trip de export e import", () => {
+  const profile = withHardware(
+    createProfile("dev", "PXN", 1000),
+    /** @type {any} */ (hardware),
+    2000,
+  );
+  const restored = parseProfilesExport(serialiseProfiles([profile]));
+  assert.deepEqual(restored[0], profile);
 });

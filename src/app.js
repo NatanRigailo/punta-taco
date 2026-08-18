@@ -5,6 +5,7 @@
 
 import { mountInputPanel } from "./ui/input-panel.js";
 import { mountRecordPanel } from "./ui/record-panel.js";
+import { mountDiagnosticsPanel } from "./ui/diagnostics-panel.js";
 
 /**
  * @param {string} id
@@ -17,4 +18,5 @@ function mountInto(id, mount) {
 }
 
 mountInto("input-panel", mountInputPanel);
+mountInto("diagnostics-panel", mountDiagnosticsPanel);
 mountInto("record-panel", mountRecordPanel);
