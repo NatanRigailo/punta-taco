@@ -1,5 +1,5 @@
 /**
- * Device selection, pedal mapping and calibration.
+ * Device selection, pedal mapping, calibration and hardware profile.
  *
  * Deliberately does its own rendering with plain DOM: the panel is small, and
  * the live readout runs on the animation frame, which is easier to reason about
@@ -23,11 +23,21 @@ import {
   describeCalibration,
   isCalibrated,
   normalise,
+  onCalibrationChange,
   setCalibration,
 } from "../input/calibration.js";
+import { deleteProfile, getProfile, listProfiles, putProfile } from "../storage/db.js";
+import {
+  createProfile,
+  parseProfilesExport,
+  serialiseProfiles,
+  withPedal,
+  withoutPedal,
+} from "../storage/profiles.js";
 
 /** @typedef {import("../input/devices.js").DeviceInfo} DeviceInfo */
 /** @typedef {import("../input/mapping.js").PedalRole} PedalRole */
+/** @typedef {import("../storage/profiles.js").HardwareProfile} HardwareProfile */
 
 /** @typedef {{ role: PedalRole, kind: "detect" | "calibrate" }} BusyState */
 
@@ -62,6 +72,15 @@ function button(text) {
 }
 
 /**
+ * The gamepad id carries vendor and product ids that are noise in a label.
+ * @param {string} deviceId
+ */
+function shortName(deviceId) {
+  const cut = deviceId.indexOf("(");
+  return (cut > 0 ? deviceId.slice(0, cut) : deviceId).trim() || deviceId;
+}
+
+/**
  * @typedef {object} RoleView
  * @property {HTMLElement} axisText
  * @property {HTMLElement} fill
@@ -83,6 +102,15 @@ export function mountInputPanel(root) {
   let selected = null;
   /** @type {BusyState | null} */
   let busy = null;
+  /** @type {HardwareProfile | null} */
+  let profile = null;
+  /** While a stored profile is being applied, changes are echoes of the load
+   *  and must not be written straight back. */
+  let restoring = false;
+  /** Device changes can arrive faster than IndexedDB answers, so each restore
+   *  claims a sequence number and a superseded one drops its result instead of
+   *  applying a profile for a device that is no longer selected. */
+  let restoreSeq = 0;
 
   const status = el("p", { class: "status" });
   const select = document.createElement("select");
@@ -126,7 +154,160 @@ export function mountInputPanel(root) {
   }
 
   const readiness = el("p", { class: "readiness" });
-  root.append(status, deviceRow, roleList, readiness);
+
+  const profileState = el("span", { class: "summary" });
+  const exportButton = button("exportar");
+  const importButton = button("importar");
+  const forgetButton = button("esquecer perfil");
+  const importInput = document.createElement("input");
+  importInput.type = "file";
+  importInput.accept = "application/json,.json";
+  importInput.hidden = true;
+
+  const profileBox = el("div", { class: "profile" }, [
+    el("div", { class: "role-head" }, [
+      el("strong", { text: "Perfil" }),
+      profileState,
+      exportButton,
+      importButton,
+      forgetButton,
+    ]),
+    importInput,
+  ]);
+
+  exportButton.addEventListener("click", () => void runExport());
+  importButton.addEventListener("click", () => importInput.click());
+  importInput.addEventListener("change", () => void runImport());
+  forgetButton.addEventListener("click", () => void runForget());
+
+  root.append(status, deviceRow, roleList, readiness, profileBox);
+
+  /* ---------- persistence ------------------------------------------------ */
+
+  /** @param {number | null} index */
+  async function setSelected(index) {
+    if (selected === index) return;
+    selected = index;
+    syncControls();
+    await restoreProfile();
+  }
+
+  /** @returns {DeviceInfo | null} */
+  function selectedDevice() {
+    return devices.find((d) => d.index === selected) ?? null;
+  }
+
+  async function restoreProfile() {
+    const seq = ++restoreSeq;
+    const device = selectedDevice();
+    restoring = true;
+    try {
+      for (const { role } of ROLES) {
+        clearCalibration(role);
+        clearAssignment(role);
+      }
+      const stored = device ? await getProfile(device.id) : null;
+      if (seq !== restoreSeq) return; // superseded by a newer selection
+      profile = stored;
+
+      if (device && profile) {
+        for (const { role } of ROLES) {
+          const entry = profile.pedals[role];
+          if (!entry) continue;
+          // Order matters: assigning clears the calibration for that role, so
+          // the stored calibration has to be applied after the assignment.
+          assign(role, device.index, entry.axis);
+          setCalibration(role, entry.calibration);
+        }
+      }
+    } catch (err) {
+      if (seq === restoreSeq) {
+        profileState.textContent = `falha ao ler o perfil: ${messageOf(err)}`;
+      }
+    } finally {
+      // Only the newest restore owns the flag; an older one unsetting it would
+      // let the echo of its own writes reach persist().
+      if (seq === restoreSeq) restoring = false;
+    }
+    if (seq !== restoreSeq) return;
+    renderRoles();
+    renderProfile();
+  }
+
+  async function persist() {
+    if (restoring) return;
+    const device = selectedDevice();
+    if (!device) return;
+
+    let next = profile ?? createProfile(device.id, shortName(device.id));
+    for (const { role } of ROLES) {
+      const assignment = assignmentFor(role);
+      const calibration = calibrationFor(role);
+      next = assignment && calibration
+        ? withPedal(next, role, { axis: assignment.axis, calibration })
+        : withoutPedal(next, role);
+    }
+
+    try {
+      await putProfile(next);
+      profile = next;
+    } catch (err) {
+      profileState.textContent = `falha ao salvar: ${messageOf(err)}`;
+      return;
+    }
+    renderProfile();
+  }
+
+  async function runExport() {
+    try {
+      const all = await listProfiles();
+      if (all.length === 0) {
+        profileState.textContent = "nada para exportar ainda";
+        return;
+      }
+      const blob = new Blob([serialiseProfiles(all)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "punta-taco-perfis.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      profileState.textContent = `${all.length} perfil(is) exportado(s)`;
+    } catch (err) {
+      profileState.textContent = `falha ao exportar: ${messageOf(err)}`;
+    }
+  }
+
+  async function runImport() {
+    const file = importInput.files?.[0];
+    importInput.value = "";
+    if (!file) return;
+
+    try {
+      const imported = parseProfilesExport(await file.text());
+      for (const entry of imported) await putProfile(entry);
+      await restoreProfile();
+      profileState.textContent = `${imported.length} perfil(is) importado(s)`;
+    } catch (err) {
+      // Import is the one place consuming data the app did not produce, so the
+      // failure has to name what is wrong instead of failing silently.
+      profileState.textContent = `arquivo recusado: ${messageOf(err)}`;
+    }
+  }
+
+  async function runForget() {
+    const device = selectedDevice();
+    if (!device) return;
+    try {
+      await deleteProfile(device.id);
+      await restoreProfile();
+      profileState.textContent = "perfil apagado";
+    } catch (err) {
+      profileState.textContent = `falha ao apagar: ${messageOf(err)}`;
+    }
+  }
+
+  /* ---------- flows ------------------------------------------------------ */
 
   /** @param {PedalRole} role */
   async function runDetection(role) {
@@ -174,7 +355,7 @@ export function mountInputPanel(root) {
         },
       });
       setCalibration(role, calibration);
-      if (view) view.hint.textContent = "calibrado";
+      if (view) view.hint.textContent = "calibrado e salvo";
     } catch (err) {
       if (view) view.hint.textContent = messageOf(err);
     } finally {
@@ -184,9 +365,11 @@ export function mountInputPanel(root) {
     }
   }
 
+  /* ---------- rendering -------------------------------------------------- */
+
   function syncControls() {
+    const running = busy !== null;
     for (const [role, view] of roleViews) {
-      const running = busy !== null;
       view.detectButton.disabled = selected === null || running;
       view.calibrateButton.disabled = running || assignmentFor(role) === null;
 
@@ -196,6 +379,9 @@ export function mountInputPanel(root) {
         ? "calibrando…"
         : isCalibrated(role) ? "recalibrar" : "calibrar";
     }
+    forgetButton.disabled = running || profile === null;
+    exportButton.disabled = running;
+    importButton.disabled = running;
   }
 
   function renderRoles() {
@@ -232,6 +418,19 @@ export function mountInputPanel(root) {
     readiness.className = "readiness pending";
   }
 
+  function renderProfile() {
+    if (!profile) {
+      profileState.textContent = selected === null
+        ? "nenhum dispositivo selecionado"
+        : "sem perfil salvo — calibrar já grava um";
+    } else {
+      const when = new Date(profile.updatedAt).toLocaleString("pt-BR");
+      const mapped = Object.keys(profile.pedals).length;
+      profileState.textContent = `${profile.name} · ${mapped} pedal(is) · salvo em ${when}`;
+    }
+    syncControls();
+  }
+
   function renderDevices() {
     if (devices.length === 0) {
       status.textContent =
@@ -239,7 +438,7 @@ export function mountInputPanel(root) {
       status.className = "status waiting";
       deviceRow.hidden = true;
       roleList.hidden = true;
-      selected = null;
+      void setSelected(null);
       syncControls();
       return;
     }
@@ -249,11 +448,6 @@ export function mountInputPanel(root) {
     deviceRow.hidden = false;
     roleList.hidden = false;
 
-    if (!devices.some((d) => d.index === selected)) {
-      const first = devices[0];
-      selected = first ? first.index : null;
-    }
-
     select.replaceChildren();
     for (const d of devices) {
       const option = document.createElement("option");
@@ -261,19 +455,28 @@ export function mountInputPanel(root) {
       option.textContent = `[${d.index}] ${d.id} — ${d.axisCount} eixos`;
       select.append(option);
     }
+
+    if (!devices.some((d) => d.index === selected)) {
+      const first = devices[0];
+      void setSelected(first ? first.index : null);
+    }
     if (selected !== null) select.value = String(selected);
     syncControls();
   }
 
-  select.addEventListener("change", () => {
-    selected = Number(select.value);
-    syncControls();
-  });
+  select.addEventListener("change", () => void setSelected(Number(select.value)));
 
   // Remapping an axis invalidates the calibration captured for the old one.
   const unassign = onAssignmentChange((role) => {
     clearCalibration(role);
     renderRoles();
+  });
+
+  // Every calibration change — new, cleared or restored — is what the profile
+  // tracks, so persistence hangs off this single point.
+  const uncalibrate = onCalibrationChange(() => {
+    renderRoles();
+    void persist();
   });
 
   const unwatch = watchDevices((next) => {
@@ -306,11 +509,13 @@ export function mountInputPanel(root) {
 
   renderDevices();
   renderRoles();
+  renderProfile();
 
   return () => {
     cancelAnimationFrame(frame);
     unwatch();
     unassign();
+    uncalibrate();
     root.replaceChildren();
   };
 }
