@@ -143,6 +143,9 @@ para não erodirem um pacote conveniente por vez.
 | Install scripts nunca executam | `ignore-scripts=true` no `.npmrc` + `--ignore-scripts` no CI |
 | Lockfile versionado | `package-lock.json` no repo, instalação reprodutível |
 | Vulnerabilidade conhecida barra o merge | `npm audit --audit-level=moderate` no CI |
+| Actions pinadas por SHA de commit | CI reprova qualquer `uses:` que não termine em 40 hex |
+| Instalação sempre a partir do lockfile | `npm ci`, nunca `npm install`, dentro do CI |
+| SAST | CodeQL em push, PR e semanalmente |
 
 **Estado hoje:** uma devDependency, `typescript`, com **zero dependências transitivas**,
 publicada pela Microsoft e usada só como verificador no CI.

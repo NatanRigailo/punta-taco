@@ -21,10 +21,11 @@ jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+          cache: npm
 
       - name: Nenhuma dependencia de runtime
         run: |
@@ -36,8 +37,26 @@ jobs:
           fi
           echo "ok: zero dependencias de runtime"
 
-      - name: Instalar sem executar scripts
-        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Actions pinadas por SHA
+        run: |
+          # Uma tag pode ser reapontada pelo dono da action a qualquer momento;
+          # um SHA de commit, nao. Aceita apenas ref de 40 hex.
+          bad=$(grep -rhoE 'uses:[[:space:]]+[^[:space:]]+' .github/workflows/ \
+                | awk '{print $2}' \
+                | grep -vE '@[0-9a-f]{40}$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::action nao pinada por SHA de commit:"
+            printf '  %s\n' $bad
+            exit 1
+          fi
+          echo "ok: todas as actions pinadas por SHA"
+
+      # `npm ci` instala exatamente o que o lockfile manda e aborta quando ele
+      # diverge do package.json — por isso nao existe passo separado checando
+      # essa consistencia. `npm install` faria o contrario: resolveria algo novo
+      # e reescreveria o lockfile dentro do CI.
+      - name: Instalar a partir do lockfile
+        run: npm ci --ignore-scripts
 
       - name: Tamanho da arvore instalada
         run: |
