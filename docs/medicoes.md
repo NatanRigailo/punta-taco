@@ -28,6 +28,36 @@ sólidas. Jerk é utilizável, mas apenas como valor relativo ao histórico do p
 3. **Granularidade de tempo é ~19 ms.** Erro de onset não pode ser exibido com precisão menor.
 4. **Jerk nunca comparado entre perfis de hardware.**
 
+### Efeito do filtro (medido depois, na #11)
+
+O piso de ~6,6 curso/s² acima é o do **sinal cru** — um degrau de quantização aparecendo e
+sumindo entre duas amostras. O Savitzky-Golay derruba isso bastante:
+
+| Janela | Ganho de ruído na 2ª derivada | Piso do jerk na PXN |
+|---|---|---|
+| 5 pontos (100 ms) | 0,534 | 0,96 curso/s² |
+| 7 pontos (140 ms) | 0,218 | 0,39 curso/s² |
+| 9 pontos (180 ms) | 0,114 | 0,21 curso/s² |
+
+Mas a janela **não** pode crescer à vontade, e o limite é fidelidade, não ruído. Contra um perfil
+de jerk mínimo com onset de 250 ms — o formato que movimento humano de fato segue — o erro de
+reconstrução da 2ª derivada cresce de forma monotônica:
+
+| Janela | Erro no pico | RMSE |
+|---|---|---|
+| 5 pontos (100 ms) | −9 % | 6,3 |
+| 7 pontos (140 ms) | −5 % | 12,1 |
+| 9 pontos (180 ms) | +37 % | 18,1 |
+| 11 pontos (220 ms) | +66 % | 22,5 |
+
+Passando de 140 ms a janela vira uma fração grande do próprio evento medido e o ajuste cúbico
+deixa de descrevê-lo. Daí o teto de 7 pontos: alargar continuaria melhorando o número de ruído
+enquanto destrói o sinal — o que é pior que ruído, porque ainda produz um número de aparência
+confiável.
+
+**Para a PXN VD4 a janela escolhida é a mínima, 5 pontos**, com piso de 0,96 contra um sinal de
+~60 a 90 curso/s². Margem de quase duas ordens de grandeza.
+
 ### Método — limitações conhecidas
 
 - O polling do probe roda a ~212 Hz (`setTimeout` do Chrome trava em 4 ms), então a resolução da
