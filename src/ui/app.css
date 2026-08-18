@@ -92,6 +92,41 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 .bar > i.idle { background: #333; }
 
+/* Antes da calibração a barra mostra o valor bruto do eixo, que não é
+   a mesma grandeza — a cor avisa que aquilo ainda não é curso de pedal. */
+.bar > i.raw { background: var(--warn); }
+
+.bar { position: relative; }
+
+/* Faixa de deadzone, desenhada sobre o início da barra. */
+.deadzone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 3px, #00000055 3px, #00000055 6px
+  );
+  pointer-events: none;
+}
+
+.summary {
+  display: block;
+  color: var(--dim);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.readiness {
+  margin: 24px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.readiness.ok { color: var(--ok); }
+.readiness.pending { color: var(--warn); }
+
 .hint {
   display: block;
   color: var(--dim);
