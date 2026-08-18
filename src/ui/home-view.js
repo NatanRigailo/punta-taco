@@ -8,7 +8,7 @@
  */
 
 import { el } from "./dom.js";
-import { QUICK_DRILLS } from "../drills/catalog.js";
+import { QUICK_SCENARIOS, isPlayable } from "../scenarios/catalog.js";
 import { readPedals } from "../input/pedals.js";
 
 /**
@@ -27,15 +27,15 @@ function categories() {
       title: "Treinos rápidos",
       tagline: "5–8s por tentativa",
       description:
-        "Um gesto por vez, repetido até sair limpo. Ciclo curto: pisa, vê o traço, repete.",
+        "Um momento de corrida por vez, repetido até sair limpo. Ciclo curto: pisa, vê o traço, repete.",
       href: "#/rapidos",
-      status: `${QUICK_DRILLS.length} drills`,
+      status: `${QUICK_SCENARIOS.filter(isPlayable).length} cenários`,
     },
     {
       title: "Sessões",
       tagline: "sequências de ~60s",
       description:
-        "Vários gestos encadeados, como numa volta. Treina resistência e consistência, não só o gesto isolado.",
+        "Vários cenários encadeados, como numa volta. Treina resistência e consistência, não só o momento isolado.",
       href: null,
       status: "em breve",
     },

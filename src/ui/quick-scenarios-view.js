@@ -1,5 +1,5 @@
 /**
- * Quick drills: the list, and one drill being run.
+ * Quick scenarios: the list, and one scenario being run.
  *
  * No target curve and no score yet — both are M1. What a run does today is
  * record the attempt on the fixed grid and show what the pedal actually did,
@@ -7,7 +7,12 @@
  */
 
 import { el, button, table } from "./dom.js";
-import { QUICK_DRILLS, describePedal, drillById } from "../drills/catalog.js";
+import {
+  QUICK_SCENARIOS,
+  describePedal,
+  isPlayable,
+  scenarioById,
+} from "../scenarios/catalog.js";
 import { readPedals } from "../input/pedals.js";
 import { recordAttempt } from "../engine/recorder.js";
 import { STEP_MS } from "../engine/resample.js";
@@ -18,7 +23,7 @@ import { navigate } from "./router.js";
  * @param {HTMLElement} root
  * @returns {() => void}
  */
-export function mountQuickDrills(root) {
+export function mountQuickScenarios(root) {
   root.append(
     el("nav", { class: "crumbs" }, [el("a", { href: "#/", text: "← início" })]),
     el("header", { class: "view-head" }, [
@@ -26,29 +31,41 @@ export function mountQuickDrills(root) {
       el("p", {
         class: "lead",
         text:
-          "Um gesto por vez, entre 5 e 8 segundos. As formas vêm de telemetria real, não de "
-          + "curvas inventadas. Curva-alvo e nota chegam no M1 — por enquanto cada drill grava a "
-          + "tentativa e mostra o que o seu pé fez.",
+          "Um momento de corrida por vez, entre 5 e 8 segundos. Cada cenário é uma situação que "
+          + "você reconhece de dentro do sim, e não um gesto abstrato de manual. Curva-alvo e nota "
+          + "chegam no M1 — por enquanto cada um grava a tentativa e mostra o que o seu pé fez.",
       }),
     ]),
   );
 
   const list = el("div", { class: "drill-list" });
-  for (const drill of QUICK_DRILLS) {
-    list.append(
-      el("a", { class: "drill-card", href: `#/rapidos/${drill.id}` }, [
-        el("div", { class: "card-head" }, [
-          el("h2", { text: drill.name }),
-          el("span", { class: "badge muted", text: `${drill.durationMs / 1000}s` }),
-        ]),
-        el("p", { class: "card-text", text: drill.summary }),
-        el("p", {
-          class: "tagline",
-          text: `${describePedal(drill.pedal)} · mede ${drill.focus}`,
+  for (const scenario of QUICK_SCENARIOS) {
+    const body = [
+      el("div", { class: "card-head" }, [
+        el("h2", { text: scenario.name }),
+        el("span", {
+          class: isPlayable(scenario) ? "badge" : "badge muted",
+          text: isPlayable(scenario) ? `${scenario.durationMs / 1000}s` : "em breve",
         }),
       ]),
-    );
+      el("p", { class: "card-text", text: scenario.situation }),
+      el("p", {
+        class: "tagline",
+        text: isPlayable(scenario)
+          ? `${scenario.reference} · ${describePedal(scenario.pedal)} · mede ${scenario.focus}`
+          : `${scenario.reference} · ${scenario.blockedBy}`,
+      }),
+    ];
+
+    if (isPlayable(scenario)) {
+      list.append(el("a", { class: "drill-card", href: `#/rapidos/${scenario.id}` }, body));
+    } else {
+      const card = el("div", { class: "drill-card locked" }, body);
+      card.setAttribute("aria-disabled", "true");
+      list.append(card);
+    }
   }
+
   root.append(list);
 
   return () => root.replaceChildren();
@@ -59,12 +76,17 @@ export function mountQuickDrills(root) {
  * @param {Record<string, string>} params
  * @returns {() => void}
  */
-export function mountDrill(root, params) {
-  const drill = params["id"] ? drillById(params["id"]) : null;
-  if (!drill) {
+export function mountScenario(root, params) {
+  const scenario = params["id"] ? scenarioById(params["id"]) : null;
+  if (!scenario || !isPlayable(scenario)) {
     root.append(
       el("nav", { class: "crumbs" }, [el("a", { href: "#/rapidos", text: "← treinos rápidos" })]),
-      el("p", { class: "callout", text: "Esse drill não existe." }),
+      el("p", {
+        class: "callout",
+        text: scenario
+          ? `Este cenário ainda não roda: ${scenario.blockedBy}.`
+          : "Esse cenário não existe.",
+      }),
     );
     return () => root.replaceChildren();
   }
@@ -72,9 +94,13 @@ export function mountDrill(root, params) {
   root.append(
     el("nav", { class: "crumbs" }, [el("a", { href: "#/rapidos", text: "← treinos rápidos" })]),
     el("header", { class: "view-head" }, [
-      el("h1", { text: drill.name }),
-      el("p", { class: "tagline", text: `${describePedal(drill.pedal)} · ${drill.durationMs / 1000}s · mede ${drill.focus}` }),
-      el("p", { class: "lead", text: drill.detail }),
+      el("h1", { text: scenario.name }),
+      el("p", {
+        class: "tagline",
+        text: `${scenario.reference} · ${describePedal(scenario.pedal)} · ${scenario.durationMs / 1000}s · mede ${scenario.focus}`,
+      }),
+      el("p", { class: "lead", text: scenario.situation }),
+      el("p", { class: "lead", text: scenario.detail }),
     ]),
   );
 
@@ -88,9 +114,9 @@ export function mountDrill(root, params) {
     return () => root.replaceChildren();
   }
 
-  // Capturado depois da guarda: o narrowing de `drill` não atravessa o closure
+  // Capturado depois da guarda: o narrowing de `scenario` não atravessa o closure
   // assíncrono de `run`, e repetir a checagem lá dentro seria ruído.
-  const target = drill;
+  const target = scenario;
 
   const traceHost = el("section", { class: "panel" });
   const traceTeardown = mountTracePanel(traceHost);
