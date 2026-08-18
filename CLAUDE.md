@@ -31,7 +31,8 @@ sobreposto, e métricas que apontam onde a aplicação foi grosseira. Escopo com
   custa mais que cobertura de tipo em teste
 - **Render:** Canvas 2D, sem framework
 - **Input:** Gamepad API
-- **Persistência:** IndexedDB (local); Supabase a partir do M2, só para ranking
+- **Persistência:** IndexedDB via wrapper próprio em `src/storage/db.js`, sem biblioteca;
+  Supabase a partir do M2, só para ranking
 - **Hospedagem:** nenhuma por enquanto — fase local (`npm run serve`). Pages volta quando fizer sentido
 
 **Não há build step.** Os arquivos do repo são o site. TypeScript é verificador, nunca etapa de
@@ -119,6 +120,10 @@ Merge de PR, push direto na `main`, deletar branch remota sem confirmação, mex
   a segunda derivada de sinal quantizado é quase só ruído.
 - **Nunca exiba precisão que não existe.** A 60Hz o quantum de tempo é ~17ms; erro de onset não
   pode aparecer com uma casa decimal de milissegundo.
+- **O `index` do gamepad não identifica dispositivo entre sessões** — o browser reusa o número.
+  A chave estável é a string `gamepad.id`, que é o keyPath do store de perfis.
+- **Perfil importado é entrada não confiável.** `parseProfile` valida campo a campo e recusa
+  explicando o que está errado; nunca aceitar pela metade.
 - **Load cell mede força, potenciômetro mede curso.** Normalizar sempre em 0–100% do range
   calibrado, e jamais comparar valores absolutos entre perfis de hardware diferentes.
 

@@ -127,6 +127,15 @@ button:disabled { opacity: 0.4; cursor: default; }
 .readiness.ok { color: var(--ok); }
 .readiness.pending { color: var(--warn); }
 
+.profile {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.profile .role-head { flex-wrap: wrap; }
+.profile .summary { flex: 1; min-width: 200px; margin-top: 0; }
+
 .hint {
   display: block;
   color: var(--dim);
