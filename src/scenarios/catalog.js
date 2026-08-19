@@ -39,6 +39,9 @@
  * @property {ScenarioPedal} pedal
  * @property {number} durationMs
  * @property {string} focus     The metric this scenario exists to move.
+ * @property {import("./target.js").TargetCurve} [target]
+ *   The guide: where the input has to be, instant by instant. Absent only for
+ *   scenarios measured against an event instead of a curve.
  * @property {string} [blockedBy] Why it cannot be run yet, when it cannot.
  */
 
@@ -55,6 +58,17 @@ export const QUICK_SCENARIOS = [
     pedal: "brake",
     durationMs: 7000,
     focus: "erro de onset e overshoot",
+    target: {
+      // Sobe depressa, segura o patamar, e sai sem pressa.
+      brake: [
+        { kind: "idle", ms: 1500 },
+        { kind: "ramp", ms: 300, to: 0.95 },
+        { kind: "hold", ms: 2500 },
+        { kind: "release", ms: 700, to: 0 },
+        { kind: "idle", ms: 2000 },
+      ],
+      throttle: [{ kind: "idle", ms: 7000 }],
+    },
   },
   {
     id: "liberacao-longa",
@@ -67,6 +81,17 @@ export const QUICK_SCENARIOS = [
     pedal: "brake",
     durationMs: 8000,
     focus: "linearidade da liberação",
+    target: {
+      // A descida é linear de propósito: é exatamente o que se está medindo.
+      brake: [
+        { kind: "idle", ms: 1500 },
+        { kind: "ramp", ms: 350, to: 0.9 },
+        { kind: "hold", ms: 500 },
+        { kind: "release", ms: 3500, to: 0, curve: "linear", tolerance: 0.05 },
+        { kind: "idle", ms: 2150 },
+      ],
+      throttle: [{ kind: "idle", ms: 8000 }],
+    },
   },
   {
     id: "dois-estagios",
@@ -79,6 +104,18 @@ export const QUICK_SCENARIOS = [
     pedal: "brake",
     durationMs: 8000,
     focus: "suavidade na troca de estágio",
+    target: {
+      brake: [
+        { kind: "idle", ms: 1500 },
+        { kind: "ramp", ms: 350, to: 0.9 },
+        { kind: "hold", ms: 400 },
+        { kind: "release", ms: 900, to: 0.45, curve: "linear" },
+        { kind: "hold", ms: 700 },
+        { kind: "release", ms: 1200, to: 0, curve: "linear" },
+        { kind: "idle", ms: 2950 },
+      ],
+      throttle: [{ kind: "idle", ms: 8000 }],
+    },
   },
   {
     id: "troca-de-pedal",
@@ -91,6 +128,22 @@ export const QUICK_SCENARIOS = [
     pedal: "both",
     durationMs: 6000,
     focus: "overlap e lacuna na troca",
+    target: {
+      // O acelerador começa exatamente quando o freio zera: sem overlap,
+      // sem lacuna. A tolerância é apertada justo nesse encontro.
+      brake: [
+        { kind: "idle", ms: 1200 },
+        { kind: "ramp", ms: 300, to: 0.8 },
+        { kind: "hold", ms: 800 },
+        { kind: "release", ms: 900, to: 0, curve: "linear", tolerance: 0.04 },
+        { kind: "idle", ms: 2800 },
+      ],
+      throttle: [
+        { kind: "idle", ms: 3200 },
+        { kind: "ramp", ms: 1200, to: 0.9, tolerance: 0.04 },
+        { kind: "idle", ms: 1600 },
+      ],
+    },
   },
   {
     id: "aplicacao-progressiva",
@@ -103,6 +156,15 @@ export const QUICK_SCENARIOS = [
     pedal: "throttle",
     durationMs: 6000,
     focus: "jerk na aplicação",
+    target: {
+      brake: [{ kind: "idle", ms: 6000 }],
+      throttle: [
+        { kind: "idle", ms: 1500 },
+        { kind: "ramp", ms: 2500, to: 1 },
+        { kind: "hold", ms: 500 },
+        { kind: "idle", ms: 1500 },
+      ],
+    },
   },
   {
     id: "largada",
