@@ -328,3 +328,37 @@ a { color: var(--ok); }
 
 .trace-modes label { margin-right: 10px; cursor: pointer; }
 .trace-modes input { accent-color: var(--ok); cursor: pointer; }
+
+.lights {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin: 26px 0 18px;
+}
+
+.bulb {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  border: 1px solid #2f2f2f;
+  transition: background 60ms linear, box-shadow 60ms linear;
+}
+
+.bulb.on {
+  background: #dc2626;
+  border-color: #f87171;
+  box-shadow: 0 0 18px #dc2626aa;
+}
+
+.launch-state {
+  text-align: center;
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--dim);
+  min-height: 1.6em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bulb { transition: none; }
+}

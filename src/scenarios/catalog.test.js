@@ -88,6 +88,27 @@ test("cenário bloqueado diz o motivo", () => {
   }
 });
 
+test("todo cenário declara como é executado", () => {
+  // O tipo decide qual runner a view monta; um valor novo sem runner cairia
+  // silenciosamente no caminho padrão e gravaria a tentativa errada.
+  for (const scenario of QUICK_SCENARIOS) {
+    assert.ok(
+      scenario.kind === "trace" || scenario.kind === "launch",
+      `${scenario.id} com kind inválido: ${scenario.kind}`,
+    );
+  }
+});
+
+test("cenário de largada não depende do guia na tela", () => {
+  // É o que permite ele existir antes do M1: o alvo dele é um evento.
+  const launch = QUICK_SCENARIOS.filter((s) => s.kind === "launch");
+  assert.ok(launch.length > 0);
+  for (const scenario of launch) {
+    assert.ok(isPlayable(scenario), `${scenario.id} não deveria estar bloqueado`);
+    assert.ok(scenario.trains.includes("timing"), "largada treina tempo por definição");
+  }
+});
+
 test("existe pelo menos um cenário jogável", () => {
   assert.ok(QUICK_SCENARIOS.some(isPlayable));
 });

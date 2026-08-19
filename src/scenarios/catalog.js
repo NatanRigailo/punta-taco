@@ -36,6 +36,9 @@
  * @property {string} shape     The pedal movement, in one line. Shown on the card.
  * @property {string} detail    What good looks like, shown while running.
  * @property {TrainingAxis[]} trains
+ * @property {"trace" | "launch"} kind
+ *   How the scenario is run. `trace` records against the on-screen guide;
+ *   `launch` waits for a signal, which is why it can exist before the guide does.
  * @property {ScenarioPedal} pedal
  * @property {number} durationMs
  * @property {string} focus     The metric this scenario exists to move.
@@ -46,6 +49,7 @@
 export const QUICK_SCENARIOS = [
   {
     id: "freada-reta",
+    kind: "trace",
     name: "Freada em linha reta",
     shape: "Subir depressa até um patamar alto, segurar, e soltar.",
     detail:
@@ -58,6 +62,7 @@ export const QUICK_SCENARIOS = [
   },
   {
     id: "liberacao-longa",
+    kind: "trace",
     name: "Liberação longa",
     shape: "Pico e então uma descida contínua até zero.",
     detail:
@@ -70,6 +75,7 @@ export const QUICK_SCENARIOS = [
   },
   {
     id: "dois-estagios",
+    kind: "trace",
     name: "Liberação em dois estágios",
     shape: "Soltar, segurar num patamar intermediário, e soltar de novo.",
     detail:
@@ -82,6 +88,7 @@ export const QUICK_SCENARIOS = [
   },
   {
     id: "troca-de-pedal",
+    kind: "trace",
     name: "Troca de pedal",
     shape: "Zerar o freio e subir o acelerador, um logo após o outro.",
     detail:
@@ -94,6 +101,7 @@ export const QUICK_SCENARIOS = [
   },
   {
     id: "aplicacao-progressiva",
+    kind: "trace",
     name: "Aplicação progressiva",
     shape: "Do zero ao fundo do acelerador, sem degrau em nenhum ponto.",
     detail:
@@ -106,6 +114,7 @@ export const QUICK_SCENARIOS = [
   },
   {
     id: "largada",
+    kind: "launch",
     name: "Largada",
     shape: "Acelerador firme, freio segurando, e soltar o freio ao sinal.",
     detail:
@@ -115,7 +124,6 @@ export const QUICK_SCENARIOS = [
     pedal: "both",
     durationMs: 8000,
     focus: "reação e queima de largada",
-    blockedBy: "precisa do sinal de largada",
   },
 ];
 
