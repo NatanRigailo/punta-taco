@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 
 import {
   QUICK_SCENARIOS,
+  describeAxis,
   describePedal,
   isPlayable,
   scenarioById,
@@ -38,13 +39,42 @@ test("treinos rápidos ficam entre 5 e 8 segundos", () => {
   }
 });
 
-test("todo cenário descreve a situação, a referência e o que mede", () => {
-  // A situação é o que separa cenário de gesto abstrato; sem ela o catálogo
-  // volta a ser vocabulário de manual.
+test("todo cenário descreve a forma do movimento e o que mede", () => {
   for (const scenario of QUICK_SCENARIOS) {
-    assert.ok(scenario.situation.length > 0, `${scenario.id} sem situação`);
-    assert.ok(scenario.reference.length > 0, `${scenario.id} sem referência real`);
+    assert.ok(scenario.shape.length > 0, `${scenario.id} sem forma declarada`);
+    assert.ok(scenario.detail.length > 0, `${scenario.id} sem descrição do que é bom`);
     assert.ok(scenario.focus.length > 0, `${scenario.id} sem foco declarado`);
+  }
+});
+
+test("todo cenário declara ao menos um eixo de treino", () => {
+  // Tempo, quantidade, coordenação e suavidade são o que o produto treina.
+  // Um cenário que não move nenhum deles não tem por que existir.
+  for (const scenario of QUICK_SCENARIOS) {
+    assert.ok(scenario.trains.length > 0, `${scenario.id} não treina nada`);
+    assert.equal(
+      new Set(scenario.trains).size,
+      scenario.trains.length,
+      `${scenario.id} repete eixo`,
+    );
+  }
+});
+
+test("os quatro eixos de treino estão cobertos pelo catálogo", () => {
+  // Um eixo sem nenhum cenário é uma lacuna no produto, não uma escolha.
+  const covered = new Set(QUICK_SCENARIOS.flatMap((s) => s.trains));
+  for (const axis of ["timing", "amount", "coordination", "smoothness"]) {
+    assert.ok(covered.has(/** @type {any} */ (axis)), `nenhum cenário treina ${axis}`);
+  }
+});
+
+test("nenhum cenário cita pista ou curva real", () => {
+  // O app não tem velocidade, carga nem pista: prometer contexto que a tela
+  // não entrega convida a comparação com o simulador, que este produto perde.
+  const banned = /interlagos|monza|senna|ferradura|junção|juncao|curva \d|lago|spa|monaco/i;
+  for (const scenario of QUICK_SCENARIOS) {
+    const text = `${scenario.name} ${scenario.shape} ${scenario.detail}`;
+    assert.doesNotMatch(text, banned, `${scenario.id} cita referência real`);
   }
 });
 
@@ -63,8 +93,15 @@ test("existe pelo menos um cenário jogável", () => {
 });
 
 test("scenarioById encontra e recusa", () => {
-  assert.equal(scenarioById("entrada-rapida")?.name, "Entrada de curva rápida");
+  assert.equal(scenarioById("liberacao-longa")?.name, "Liberação longa");
   assert.equal(scenarioById("inexistente"), null);
+});
+
+test("describeAxis cobre os quatro eixos", () => {
+  assert.equal(describeAxis("timing"), "tempo");
+  assert.equal(describeAxis("amount"), "quantidade");
+  assert.equal(describeAxis("coordination"), "coordenação");
+  assert.equal(describeAxis("smoothness"), "suavidade");
 });
 
 test("describePedal cobre os três casos", () => {

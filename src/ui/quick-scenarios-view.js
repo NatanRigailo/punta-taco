@@ -9,6 +9,7 @@
 import { el, button, table } from "./dom.js";
 import {
   QUICK_SCENARIOS,
+  describeAxis,
   describePedal,
   isPlayable,
   scenarioById,
@@ -31,9 +32,10 @@ export function mountQuickScenarios(root) {
       el("p", {
         class: "lead",
         text:
-          "Um momento de corrida por vez, entre 5 e 8 segundos. Cada cenário é uma situação que "
-          + "você reconhece de dentro do sim, e não um gesto abstrato de manual. Curva-alvo e nota "
-          + "chegam no M1 — por enquanto cada um grava a tentativa e mostra o que o seu pé fez.",
+          "Um movimento por vez, entre 5 e 8 segundos. Genéricos de propósito: aqui não há "
+          + "velocidade, carga nem pista — o que se treina é tempo, quantidade, coordenação e "
+          + "suavidade do movimento. A referência é a curva na tela. Ela e a nota chegam no M1; "
+          + "por enquanto cada cenário grava a tentativa e mostra o que o seu pé fez.",
       }),
     ]),
   );
@@ -48,12 +50,12 @@ export function mountQuickScenarios(root) {
           text: isPlayable(scenario) ? `${scenario.durationMs / 1000}s` : "em breve",
         }),
       ]),
-      el("p", { class: "card-text", text: scenario.situation }),
+      el("p", { class: "card-text", text: scenario.shape }),
       el("p", {
         class: "tagline",
         text: isPlayable(scenario)
-          ? `${scenario.reference} · ${describePedal(scenario.pedal)} · mede ${scenario.focus}`
-          : `${scenario.reference} · ${scenario.blockedBy}`,
+          ? `treina ${scenario.trains.map(describeAxis).join(" e ")} · ${describePedal(scenario.pedal)}`
+          : `treina ${scenario.trains.map(describeAxis).join(" e ")} · ${scenario.blockedBy}`,
       }),
     ];
 
@@ -97,9 +99,12 @@ export function mountScenario(root, params) {
       el("h1", { text: scenario.name }),
       el("p", {
         class: "tagline",
-        text: `${scenario.reference} · ${describePedal(scenario.pedal)} · ${scenario.durationMs / 1000}s · mede ${scenario.focus}`,
+        text:
+          `treina ${scenario.trains.map(describeAxis).join(" e ")}`
+          + ` · ${describePedal(scenario.pedal)} · ${scenario.durationMs / 1000}s`
+          + ` · mede ${scenario.focus}`,
       }),
-      el("p", { class: "lead", text: scenario.situation }),
+      el("p", { class: "lead", text: scenario.shape }),
       el("p", { class: "lead", text: scenario.detail }),
     ]),
   );

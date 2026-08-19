@@ -27,7 +27,7 @@ function categories() {
       title: "Treinos rápidos",
       tagline: "5–8s por tentativa",
       description:
-        "Um momento de corrida por vez, repetido até sair limpo. Ciclo curto: pisa, vê o traço, repete.",
+        "Um movimento por vez, repetido até sair limpo. Ciclo curto: pisa, vê o traço, repete.",
       href: "#/rapidos",
       status: `${QUICK_SCENARIOS.filter(isPlayable).length} cenários`,
     },
@@ -35,7 +35,7 @@ function categories() {
       title: "Sessões",
       tagline: "sequências de ~60s",
       description:
-        "Vários cenários encadeados, como numa volta. Treina resistência e consistência, não só o momento isolado.",
+        "Vários movimentos encadeados. Treina resistência e consistência, não só o gesto isolado.",
       href: null,
       status: "em breve",
     },
@@ -43,7 +43,8 @@ function categories() {
       title: "Drill do dia",
       tagline: "a mesma curva para todos",
       description:
-        "Um desafio por dia, igual para todo mundo, com placar comparável. Precisa de servidor — chega no M2.",
+        "Um desafio por dia, igual para todo mundo, com placar comparável. Pode ser mais elaborado "
+        + "que os treinos rápidos. Precisa de servidor — chega no M2.",
       href: null,
       status: "em breve",
     },
@@ -71,8 +72,10 @@ export function mountHome(root) {
     el("p", {
       class: "lead",
       text:
-        "Aqui o pedal é isolado do resto: uma curva-alvo, o traço realizado, e números que "
-        + "apontam onde a aplicação foi grosseira. Ciclo de repetição de segundos, não de voltas.",
+        "Isto não substitui o simulador — não há velocidade, carga nem pista aqui. O que se treina "
+        + "é o movimento em si: tempo, quantidade, coordenação e suavidade. Uma curva-alvo, o traço "
+        + "realizado, e números que apontam onde a aplicação foi grosseira. Ciclo de repetição de "
+        + "segundos, não de voltas.",
     }),
   ]);
 
