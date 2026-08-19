@@ -3,7 +3,7 @@
  *
  * Telemetry convention throughout: x is time, running right to left, with the
  * playhead fixed at two thirds of the width. The empty third to its right is
- * the look-ahead — where the target curve will appear once drills exist.
+ * the look-ahead — where the target curve will appear once scenarios have one.
  */
 
 import { readPedals } from "../input/pedals.js";
