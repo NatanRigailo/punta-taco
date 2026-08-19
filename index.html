@@ -6,57 +6,18 @@
 <meta name="description" content="Instrumento de treino de aplicação de pedal para sim racing.">
 <link rel="stylesheet" href="./src/ui/app.css">
 
-<main>
-  <header>
-    <h1>Punta Taco</h1>
-    <p class="motto">smooth is fast</p>
-  </header>
-
-  <section>
-    <h2>Entrada</h2>
-    <p class="lead">
-      Escolha a pedaleira e diga qual eixo é cada pedal. Nada é assumido por padrão — a ordem dos
-      eixos muda de dispositivo para dispositivo, e mapear errado produz métrica do pedal errado.
-    </p>
-    <div id="input-panel"></div>
-  </section>
-
-  <section>
-    <h2>Traço ao vivo</h2>
-    <p class="lead">
-      Convenção de telemetria: x é tempo, correndo da direita para a esquerda, com o playhead
-      fixo a dois terços da largura. O terço vazio à direita é o look-ahead, onde a curva-alvo
-      vai aparecer quando os drills existirem.
-    </p>
-    <div id="trace-panel"></div>
-  </section>
-
-  <section>
-    <h2>Diagnóstico de hardware</h2>
-    <p class="lead">
-      Mede o que a sua pedaleira entrega de fato — taxa de report, resolução útil sobre o curso
-      calibrado e ruído em repouso — e decide quais métricas ela sustenta. Hardware ruim gera
-      aviso, nunca métrica falsa. O resultado fica gravado no perfil.
-    </p>
-    <div id="diagnostics-panel"></div>
-  </section>
-
-  <section>
-    <h2>Motor de amostragem</h2>
-    <p class="lead">
-      Grava uma tentativa de 8s e mostra o que o motor produziu. As leituras cruas guardam o
-      instante real de cada report do dispositivo; a grade de passo fixo é derivada delas depois,
-      o que faz uma máquina de 60Hz e uma de 165Hz gerarem a mesma série.
-    </p>
-    <div id="record-panel"></div>
-  </section>
-
-  <footer>
-    M0 — espinha dorsal.
-    <a href="./probe/">probe avulso</a> ·
+<nav class="topbar">
+  <a class="brand" href="#/">Punta Taco</a>
+  <div class="topbar-links">
+    <a href="#/config">configuração</a>
+    <a href="./probe/">probe avulso</a>
     <a href="https://github.com/NatanRigailo/punta-taco">código</a>
-  </footer>
-</main>
+  </div>
+</nav>
+
+<main id="view"></main>
+
+<footer class="page-footer">M0 — espinha dorsal</footer>
 
 <script type="module" src="./src/app.js"></script>
 </html>

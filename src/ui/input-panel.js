@@ -414,7 +414,7 @@ export function mountInputPanel(root) {
       return;
     }
     const names = missing.map((m) => m.label.toLowerCase()).join(" e ");
-    readiness.textContent = `Falta calibrar: ${names}. Nenhum drill roda sem calibração.`;
+    readiness.textContent = `Falta calibrar: ${names}. Nenhum cenário roda sem calibração.`;
     readiness.className = "readiness pending";
   }
 

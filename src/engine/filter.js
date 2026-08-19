@@ -9,7 +9,7 @@
  *
  * Savitzky-Golay rather than a moving average because it fits a low-order
  * polynomial over the window and reads the derivative off that fit. A moving
- * average would flatten the very peaks the drills are about.
+ * average would flatten the very peaks the scenarios are about.
  *
  * Everything is computed from first principles — no dependency. The maths is a
  * least-squares fit over a handful of points, and owning it is cheaper than
