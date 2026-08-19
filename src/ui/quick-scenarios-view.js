@@ -18,6 +18,7 @@ import { readPedals } from "../input/pedals.js";
 import { recordAttempt } from "../engine/recorder.js";
 import { STEP_MS } from "../engine/resample.js";
 import { mountTracePanel } from "./trace-panel.js";
+import { mountLaunchPanel } from "./launch-panel.js";
 import { navigate } from "./router.js";
 
 /**
@@ -122,6 +123,16 @@ export function mountScenario(root, params) {
   // Capturado depois da guarda: o narrowing de `scenario` não atravessa o closure
   // assíncrono de `run`, e repetir a checagem lá dentro seria ruído.
   const target = scenario;
+
+  // A largada é medida contra um evento, não contra um guia — por isso ela roda
+  // hoje, enquanto os demais esperam a curva-alvo do M1.
+  if (target.kind === "launch") {
+    const teardownLaunch = mountLaunchPanel(root, target);
+    return () => {
+      teardownLaunch();
+      root.replaceChildren();
+    };
+  }
 
   const traceHost = el("section", { class: "panel" });
   const traceTeardown = mountTracePanel(traceHost);

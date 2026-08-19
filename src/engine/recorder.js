@@ -42,6 +42,11 @@ const MAX_TRUSTED_GAP_MS = 250;
  * @property {number} [stepMs]
  * @property {() => import("../input/pedals.js").PedalReading} [read]
  * @property {(elapsedMs: number) => void} [onProgress]
+ * @property {(startedAt: number) => void} [onStart]
+ *   Called once with the recording's `performance.now()` origin. The launch
+ *   scenario needs it to schedule its signal on the same clock the samples are
+ *   timestamped against — otherwise reaction time would be measured between two
+ *   clocks that drift apart by however long the setup took.
  */
 
 /**
@@ -58,6 +63,7 @@ export function recordAttempt(options) {
     /** @type {RawSample[]} */
     const samples = [];
     const started = performance.now();
+    if (options.onStart) options.onStart(started);
     let lastStamp = Number.NaN;
 
     const poll = () => {
