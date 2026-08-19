@@ -1,12 +1,12 @@
 /**
- * Quick scenarios: the list, and one scenario being run.
+ * Quick scenarios: the list, and the entry point into one.
  *
- * No target curve and no score yet — both are M1. What a run does today is
- * record the attempt on the fixed grid and show what the pedal actually did,
- * which is already the loop the product is built around.
+ * The run itself lives in `scenario-run.js` for guided scenarios and in
+ * `launch-panel.js` for the launch, which is measured against an event rather
+ * than a curve. This file only decides which of the two to mount.
  */
 
-import { el, button, table } from "./dom.js";
+import { el } from "./dom.js";
 import {
   QUICK_SCENARIOS,
   describeAxis,
@@ -15,10 +15,8 @@ import {
   scenarioById,
 } from "../scenarios/catalog.js";
 import { readPedals } from "../input/pedals.js";
-import { recordAttempt } from "../engine/recorder.js";
-import { STEP_MS } from "../engine/resample.js";
-import { mountTracePanel } from "./trace-panel.js";
 import { mountLaunchPanel } from "./launch-panel.js";
+import { mountScenarioRun } from "./scenario-run.js";
 import { navigate } from "./router.js";
 
 /**
@@ -35,8 +33,8 @@ export function mountQuickScenarios(root) {
         text:
           "Um movimento por vez, entre 5 e 8 segundos. Genéricos de propósito: aqui não há "
           + "velocidade, carga nem pista — o que se treina é tempo, quantidade, coordenação e "
-          + "suavidade do movimento. A referência é a curva na tela. Ela e a nota chegam no M1; "
-          + "por enquanto cada cenário grava a tentativa e mostra o que o seu pé fez.",
+          + "suavidade do movimento. O guia na tela diz onde o seu input tem que estar, e a banda "
+          + "em volta dele é o quanto de erro aquele trecho tolera.",
       }),
     ]),
   );
@@ -134,76 +132,10 @@ export function mountScenario(root, params) {
     };
   }
 
-  const traceHost = el("section", { class: "panel" });
-  const traceTeardown = mountTracePanel(traceHost);
-
-  const startButton = button("iniciar tentativa", { variant: "primary" });
-  const state = el("span", { class: "summary" });
-  const reportHost = el("div");
-
-  const controls = el("section", { class: "panel" }, [
-    el("div", { class: "role-head" }, [
-      el("strong", { text: "Tentativa" }),
-      state,
-      startButton,
-    ]),
-    reportHost,
-  ]);
-
-  root.append(traceHost, controls);
-
-  let running = false;
-  startButton.addEventListener("click", () => void run());
-
-  async function run() {
-    if (running) return;
-    running = true;
-    startButton.disabled = true;
-    reportHost.replaceChildren();
-
-    const attempt = await recordAttempt({
-      durationMs: target.durationMs,
-      onProgress: (elapsed) => {
-        state.textContent = `${((target.durationMs - elapsed) / 1000).toFixed(1)}s`;
-      },
-    });
-
-    running = false;
-    startButton.disabled = false;
-    startButton.textContent = "repetir";
-    state.textContent = attempt.trustworthy ? "tentativa gravada" : "tentativa suspeita";
-
-    const expected = Math.round(target.durationMs / STEP_MS);
-    const peakBrake = Math.max(0, ...attempt.series.brake);
-    const peakThrottle = Math.max(0, ...attempt.series.throttle);
-
-    /** @type {[string, string, string?][]} */
-    const rows = [
-      ["pico do freio", `${(peakBrake * 100).toFixed(1)}%`],
-      ["pico do acelerador", `${(peakThrottle * 100).toFixed(1)}%`],
-      [
-        "série",
-        `${attempt.series.brake.length} pontos · passo de ${attempt.series.stepMs}ms`,
-        attempt.series.brake.length === expected ? "ok" : "bad",
-      ],
-      [
-        "cadência do dispositivo",
-        `mediana ${attempt.cadence.medianMs.toFixed(1)}ms · máx ${attempt.cadence.maxMs.toFixed(1)}ms`,
-      ],
-    ];
-    if (attempt.warning) rows.push(["aviso", attempt.warning, "warn"]);
-
-    reportHost.append(table(rows));
-    reportHost.append(
-      el("p", {
-        class: "tagline",
-        text: "Sem nota ainda: curva-alvo, faltas e métricas de suavidade chegam no M1.",
-      }),
-    );
-  }
+  const teardownRun = mountScenarioRun(root, target);
 
   return () => {
-    traceTeardown();
+    teardownRun();
     root.replaceChildren();
   };
 }
